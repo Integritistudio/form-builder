@@ -9,6 +9,8 @@ import {
   canActivateForm,
   getFormLimit,
 } from "../services/plans.js";
+import { validateFormForPlan } from "../lib/planGating.js";
+import { attachFilesToSubmissions } from "../lib/submissionFiles.js";
 
 const router = Router();
 
@@ -59,15 +61,32 @@ router.post("/", async (req, res) => {
     }
 
     const name = req.body.name?.trim() || "Untitled form";
+    const schema = req.body.schema || DEFAULT_FORM_SCHEMA;
+    const styles = req.body.styles || DEFAULT_STYLES;
+    const customCss = req.body.customCss || "";
+
+    const planErrors = validateFormForPlan(settings.plan, {
+      schema,
+      styles,
+      customCss,
+    });
+    if (planErrors.length > 0) {
+      return res.status(403).json({
+        error: planErrors[0].message,
+        code: planErrors[0].code,
+        errors: planErrors,
+      });
+    }
+
     const [form] = await db
       .insert(forms)
       .values({
         shopDomain,
         name,
         status: "draft",
-        schema: req.body.schema || DEFAULT_FORM_SCHEMA,
-        styles: req.body.styles || DEFAULT_STYLES,
-        customCss: req.body.customCss || "",
+        schema,
+        styles,
+        customCss,
       })
       .returning();
 
@@ -136,6 +155,19 @@ router.put("/:id", async (req, res) => {
     if (req.body.styles !== undefined) updates.styles = req.body.styles;
     if (req.body.customCss !== undefined) updates.customCss = req.body.customCss;
 
+    const planErrors = validateFormForPlan(settings.plan, {
+      schema: updates.schema ?? existing.schema,
+      styles: updates.styles ?? existing.styles,
+      customCss: updates.customCss ?? existing.customCss,
+    });
+    if (planErrors.length > 0) {
+      return res.status(403).json({
+        error: planErrors[0].message,
+        code: planErrors[0].code,
+        errors: planErrors,
+      });
+    }
+
     const [form] = await db
       .update(forms)
       .set(updates)
@@ -197,8 +229,13 @@ router.get("/:id/submissions", async (req, res) => {
       .from(submissions)
       .where(eq(submissions.formId, req.params.id));
 
+    const enriched = await attachFilesToSubmissions(
+      rows.map((row) => ({ ...row, formSchema: form.schema })),
+      shopDomain
+    );
+
     res.json({
-      submissions: rows,
+      submissions: enriched,
       pagination: { page, limit, total: count },
       form: { id: form.id, name: form.name, schema: form.schema },
     });

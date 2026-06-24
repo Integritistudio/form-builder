@@ -4,6 +4,26 @@ export const PLANS = {
   premium: { name: "Premium", price: 20, formLimit: Infinity },
 };
 
+export const PLAN_FEATURES = {
+  customCss: ["pro", "premium"],
+  gradients: ["pro", "premium"],
+  fileUpload: ["pro", "premium"],
+  fileUploadPremium: ["premium"],
+};
+
+export function hasFeature(plan, feature) {
+  return PLAN_FEATURES[feature]?.includes(plan) ?? false;
+}
+
+export function getPlanFeatures(plan) {
+  return {
+    customCss: hasFeature(plan, "customCss"),
+    gradients: hasFeature(plan, "gradients"),
+    fileUpload: hasFeature(plan, "fileUpload"),
+    fileUploadPremium: hasFeature(plan, "fileUploadPremium"),
+  };
+}
+
 export function getFormLimit(plan) {
   return PLANS[plan]?.formLimit ?? PLANS.free.formLimit;
 }

@@ -17,8 +17,8 @@ router.post("/subscribe", async (req, res) => {
 
     const session = res.locals.shopify.session;
     const shop = getShop(res);
-
     const { billing } = shopify.api;
+
     const hasPayment = await billing.check({
       session,
       plans: [plan],
@@ -38,6 +38,31 @@ router.post("/subscribe", async (req, res) => {
     });
 
     res.json({ success: true, redirecting: true });
+  } catch (err) {
+    console.error(err);
+    const billingMsg = err.errorData?.[0]?.message;
+    res.status(500).json({
+      error:
+        billingMsg ||
+        err.message ||
+        "Billing is unavailable for this app during development.",
+    });
+  }
+});
+
+router.post("/dev/activate", async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ error: "Not available in production." });
+    }
+
+    const plan = String(req.body.plan || "").toLowerCase();
+    if (!["free", "pro", "premium"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+
+    await updateShopPlan(getShop(res), plan);
+    res.json({ success: true, plan });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });

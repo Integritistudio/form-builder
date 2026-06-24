@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getFormStyles } from "./formStyles.js";
+import { fieldClassName } from "../../../lib/formDefaults.js";
 
 export default function FormRenderer({
   schema,
@@ -8,12 +9,14 @@ export default function FormRenderer({
   formId = "preview",
   preview = false,
   onSubmit,
+  uploadFile,
 }) {
   const [values, setValues] = useState({});
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formError, setFormError] = useState("");
+  const [uploading, setUploading] = useState({});
 
   const scopeClass = `integriti-form integriti-form-${formId}`;
   const css = getFormStyles(styles, customCss, formId);
@@ -33,6 +36,42 @@ export default function FormRenderer({
       ? [...current, option]
       : current.filter((v) => v !== option);
     setValue(fieldId, next);
+  }
+
+  async function handleFileChange(field, file) {
+    if (!file) {
+      setValue(field.id, null);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors((prev) => ({
+        ...prev,
+        [field.id]: "File must be 2 MB or smaller.",
+      }));
+      return;
+    }
+    if (preview) return;
+
+    setUploading((prev) => ({ ...prev, [field.id]: true }));
+    try {
+      if (uploadFile) {
+        const result = await uploadFile(field.id, file);
+        setValue(field.id, {
+          fileId: result.fileId,
+          originalName: file.name,
+          mimeType: file.type,
+        });
+      } else {
+        setValue(field.id, { originalName: file.name, mimeType: file.type });
+      }
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        [field.id]: err.message || "Upload failed",
+      }));
+    } finally {
+      setUploading((prev) => ({ ...prev, [field.id]: false }));
+    }
   }
 
   async function handleSubmit(e) {
@@ -57,6 +96,8 @@ export default function FormRenderer({
     }
   }
 
+  const hasHeader = schema?.title || schema?.description;
+
   if (success) {
     return (
       <div className={scopeClass}>
@@ -71,9 +112,15 @@ export default function FormRenderer({
   return (
     <div className={scopeClass}>
       <style>{css}</style>
-      {schema?.title && <h2 className="integriti-form-title">{schema.title}</h2>}
-      {schema?.description && (
-        <p className="integriti-form-description">{schema.description}</p>
+      {hasHeader && (
+        <div className="integriti-form-header">
+          {schema?.title && (
+            <h2 className="integriti-form-title">{schema.title}</h2>
+          )}
+          {schema?.description && (
+            <p className="integriti-form-description">{schema.description}</p>
+          )}
+        </div>
       )}
       {formError && <div className="integriti-form-error">{formError}</div>}
       <form onSubmit={handleSubmit} noValidate>
@@ -92,15 +139,17 @@ export default function FormRenderer({
               value={values[field.id]}
               error={errors[field.id]}
               preview={preview}
+              uploading={uploading[field.id]}
               onChange={setValue}
               onToggleGroup={toggleCheckboxGroup}
+              onFileChange={handleFileChange}
             />
           ))}
         </div>
         <button
           type="submit"
           className="integriti-submit"
-          disabled={submitting || preview}
+          disabled={submitting || preview || Object.values(uploading).some(Boolean)}
         >
           {submitting ? "Sending..." : schema?.submitLabel || "Submit"}
         </button>
@@ -109,13 +158,23 @@ export default function FormRenderer({
   );
 }
 
-function Field({ field, value, error, preview, onChange, onToggleGroup }) {
+function Field({
+  field,
+  value,
+  error,
+  preview,
+  uploading,
+  onChange,
+  onToggleGroup,
+  onFileChange,
+}) {
   const widthClass =
     field.width === "half" ? "integriti-field--half" : "integriti-field--full";
+  const className = fieldClassName(field);
 
   if (field.type === "heading") {
     return (
-      <div className={`integriti-field ${widthClass}`}>
+      <div className={className}>
         <h3 className="integriti-heading">{field.label}</h3>
       </div>
     );
@@ -123,7 +182,7 @@ function Field({ field, value, error, preview, onChange, onToggleGroup }) {
 
   if (field.type === "paragraph") {
     return (
-      <div className={`integriti-field ${widthClass}`}>
+      <div className={className}>
         <p className="integriti-paragraph">{field.label}</p>
       </div>
     );
@@ -132,7 +191,7 @@ function Field({ field, value, error, preview, onChange, onToggleGroup }) {
   const inputId = `field-${field.id}`;
 
   return (
-    <div className={`integriti-field ${widthClass}`}>
+    <div className={className}>
       <label className="integriti-label" htmlFor={inputId}>
         {field.label}
         {field.required && " *"}
@@ -225,6 +284,24 @@ function Field({ field, value, error, preview, onChange, onToggleGroup }) {
             </label>
           ))}
         </div>
+      )}
+
+      {field.type === "file" && (
+        <>
+          <input
+            id={inputId}
+            type="file"
+            className="integriti-file"
+            disabled={preview || uploading}
+            onChange={(e) => onFileChange(field, e.target.files?.[0])}
+          />
+          {uploading && (
+            <p className="integriti-file-name">Uploading...</p>
+          )}
+          {value?.originalName && !uploading && (
+            <p className="integriti-file-name">{value.originalName}</p>
+          )}
+        </>
       )}
 
       {field.helpText && <p className="integriti-help">{field.helpText}</p>}

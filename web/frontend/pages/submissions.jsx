@@ -8,34 +8,39 @@ import {
   Button,
   Stack,
   EmptyState,
+  Select,
   SkeletonBodyText,
-  Banner,
   Box,
   Badge,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useQuery } from "react-query";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-import { apiFetch } from "../../../utils/api";
+import { apiFetch } from "../utils/api";
 import SubmissionDetailModal, {
   submissionPreview,
-} from "../../../components/SubmissionDetailModal";
-import FilePreviewModal from "../../../components/FilePreviewModal";
+} from "../components/SubmissionDetailModal";
+import FilePreviewModal from "../components/FilePreviewModal";
 
-export default function SubmissionsPage() {
-  const { id } = useParams();
+export default function AllSubmissionsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [formFilter, setFormFilter] = useState("");
+  const [daysFilter, setDaysFilter] = useState("0");
   const [selected, setSelected] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
 
-  const { data, isLoading } = useQuery(["submissions", id, page], () =>
-    apiFetch(`/api/forms/${id}/submissions?page=${page}&limit=20`)
-  );
+  const queryKey = ["all-submissions", page, formFilter, daysFilter];
+  const { data, isLoading } = useQuery(queryKey, () => {
+    const params = new URLSearchParams({ page, limit: "20" });
+    if (formFilter) params.set("formId", formFilter);
+    if (daysFilter !== "0") params.set("days", daysFilter);
+    return apiFetch(`/api/submissions?${params}`);
+  });
 
   const submissions = data?.submissions || [];
-  const form = data?.form;
+  const forms = data?.forms || [];
   const total = data?.pagination?.total || 0;
 
   async function downloadFile(fileId) {
@@ -56,9 +61,14 @@ export default function SubmissionsPage() {
         </Stack>
       </IndexTable.Cell>
       <IndexTable.Cell>
+        <Button plain onClick={() => navigate(`/forms/${sub.formId}`)}>
+          {sub.formName}
+        </Button>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
         <Stack vertical spacing="extraTight">
           <Text variant="bodySm">
-            {submissionPreview(form?.schema, sub.payload, sub.files)}
+            {submissionPreview(sub.formSchema, sub.payload, sub.files)}
           </Text>
           {sub.files?.length > 0 && (
             <Badge size="small">📎 {sub.files.length} file{sub.files.length === 1 ? "" : "s"}</Badge>
@@ -66,44 +76,75 @@ export default function SubmissionsPage() {
         </Stack>
       </IndexTable.Cell>
       <IndexTable.Cell>
-        <Button onClick={() => setSelected(sub)}>View details</Button>
+        <Button onClick={() => setSelected(sub)}>View</Button>
       </IndexTable.Cell>
     </IndexTable.Row>
   ));
 
   return (
     <Page
-      title={form ? `Submissions — ${form.name}` : "Submissions"}
-      subtitle={total ? `${total} submission${total === 1 ? "" : "s"}` : undefined}
-      backAction={{ onAction: () => navigate(`/forms/${id}`) }}
+      title="Submissions"
+      subtitle={total ? `${total} total` : undefined}
     >
       <TitleBar title="Submissions" />
 
       <Layout>
         <Layout.Section>
-          <Banner
-            action={{ content: "All submissions", onAction: () => navigate("/submissions") }}
-          >
-            View submissions across all forms in one place.
-          </Banner>
+          <Card sectioned>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "16px",
+              }}
+            >
+              <Select
+                label="Form"
+                options={[
+                  { label: "All forms", value: "" },
+                  ...forms.map((f) => ({ label: f.name, value: f.id })),
+                ]}
+                value={formFilter}
+                onChange={(v) => {
+                  setFormFilter(v);
+                  setPage(1);
+                }}
+              />
+              <Select
+                label="Date range"
+                options={[
+                  { label: "All time", value: "0" },
+                  { label: "Last 7 days", value: "7" },
+                  { label: "Last 30 days", value: "30" },
+                ]}
+                value={daysFilter}
+                onChange={(v) => {
+                  setDaysFilter(v);
+                  setPage(1);
+                }}
+              />
+            </div>
+          </Card>
         </Layout.Section>
 
         <Layout.Section>
           <Card>
             {isLoading ? (
               <Box padding="400">
-                <SkeletonBodyText lines={6} />
+                <SkeletonBodyText lines={8} />
               </Box>
             ) : submissions.length === 0 ? (
               <EmptyState heading="No submissions yet">
-                <p>Submissions will appear here when customers fill out your form.</p>
+                <p>Submissions from your storefront forms will appear here.</p>
               </EmptyState>
             ) : (
               <>
                 <Box padding="300" paddingBlockEnd="0">
-                  <Badge>
-                    {total} on this form
-                  </Badge>
+                  <Stack spacing="tight">
+                    <Badge>
+                      {total} submission{total === 1 ? "" : "s"}
+                    </Badge>
+                  </Stack>
                 </Box>
                 <IndexTable
                   resourceName={{
@@ -113,6 +154,7 @@ export default function SubmissionsPage() {
                   itemCount={submissions.length}
                   headings={[
                     { title: "Date" },
+                    { title: "Form" },
                     { title: "Preview" },
                     { title: "" },
                   ]}
@@ -126,7 +168,10 @@ export default function SubmissionsPage() {
           {total > 20 && (
             <Box paddingBlockStart="400">
               <Stack distribution="center" spacing="tight">
-                <Button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                <Button
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
                   Previous
                 </Button>
                 <Text>
@@ -147,8 +192,8 @@ export default function SubmissionsPage() {
       <SubmissionDetailModal
         open={Boolean(selected)}
         submission={selected}
-        schema={form?.schema}
-        formName={form?.name}
+        schema={selected?.formSchema}
+        formName={selected?.formName}
         onClose={() => setSelected(null)}
         onDownloadFile={downloadFile}
         onViewFile={(fileId, fileName, mimeType) =>

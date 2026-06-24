@@ -6,4 +6,5 @@ export const submitRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many submissions. Please try again later." },
+  validate: { xForwardedForHeader: false },
 });

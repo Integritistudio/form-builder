@@ -12,6 +12,9 @@ import {
   Stack,
   Modal,
   useIndexResourceState,
+  SkeletonBodyText,
+  SkeletonDisplayText,
+  Box,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useQuery, useMutation, useQueryClient } from "react-query";
@@ -35,6 +38,104 @@ function CopyButton({ text }) {
   );
 }
 
+function AnalyticsCards({ analytics, loading }) {
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "16px",
+        }}
+      >
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i} sectioned>
+            <SkeletonDisplayText size="small" />
+            <Box paddingBlockStart="200">
+              <SkeletonBodyText lines={1} />
+            </Box>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (!analytics) return null;
+
+  const maxDaily = Math.max(...(analytics.dailyCounts || []).map((d) => d.count), 1);
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: "16px",
+      }}
+    >
+      <Card sectioned>
+        <Stack vertical spacing="extraTight">
+          <Text variant="bodySm" color="subdued">
+            Total submissions
+          </Text>
+          <Text variant="headingLg" as="p">
+            {analytics.totalSubmissions}
+          </Text>
+        </Stack>
+      </Card>
+      <Card sectioned>
+        <Stack vertical spacing="extraTight">
+          <Text variant="bodySm" color="subdued">
+            This week
+          </Text>
+          <Text variant="headingLg" as="p">
+            {analytics.weekSubmissions}
+          </Text>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 32 }}>
+            {(analytics.dailyCounts || []).map((d) => (
+              <div
+                key={d.date}
+                title={`${d.date}: ${d.count}`}
+                style={{
+                  flex: 1,
+                  height: `${Math.max(4, (d.count / maxDaily) * 100)}%`,
+                  background: "#2c6ecb",
+                  borderRadius: 2,
+                  minHeight: 4,
+                }}
+              />
+            ))}
+          </div>
+        </Stack>
+      </Card>
+      <Card sectioned>
+        <Stack vertical spacing="extraTight">
+          <Text variant="bodySm" color="subdued">
+            Active forms
+          </Text>
+          <Text variant="headingLg" as="p">
+            {analytics.activeForms}
+          </Text>
+        </Stack>
+      </Card>
+      <Card sectioned>
+        <Stack vertical spacing="extraTight">
+          <Text variant="bodySm" color="subdued">
+            Top form
+          </Text>
+          <Text variant="headingMd" as="p">
+            {analytics.topForm?.formName || "—"}
+          </Text>
+          {analytics.topForm && (
+            <Text variant="bodySm" color="subdued">
+              {analytics.topForm.count} submissions
+            </Text>
+          )}
+        </Stack>
+      </Card>
+    </div>
+  );
+}
+
 export default function FormsIndexPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -45,6 +146,11 @@ export default function FormsIndexPage() {
   );
 
   const { data: planData } = useQuery(["plan"], () => apiFetch("/api/plan"));
+
+  const { data: analytics, isLoading: analyticsLoading } = useQuery(
+    ["analytics"],
+    () => apiFetch("/api/submissions/analytics")
+  );
 
   const createMutation = useMutation(
     () => apiFetch("/api/forms", { method: "POST", body: JSON.stringify({}) }),
@@ -59,6 +165,7 @@ export default function FormsIndexPage() {
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["forms"]);
+        queryClient.invalidateQueries(["analytics"]);
         setDeleteId(null);
       },
     }
@@ -154,6 +261,10 @@ export default function FormsIndexPage() {
             </Banner>
           </Layout.Section>
         )}
+
+        <Layout.Section>
+          <AnalyticsCards analytics={analytics} loading={analyticsLoading} />
+        </Layout.Section>
 
         <Layout.Section>
           <Card>

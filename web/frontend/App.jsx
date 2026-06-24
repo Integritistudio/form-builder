@@ -17,6 +17,7 @@ export default function App() {
             <a href="/" rel="home">
               Forms
             </a>
+            <a href="/submissions">Submissions</a>
             <a href="/settings">Settings</a>
             <a href="/plans">Plans</a>
           </NavMenu>

@@ -54,6 +54,9 @@ export default defineConfig({
     host: "localhost",
     port: process.env.FRONTEND_PORT,
     hmr: hmrConfig,
+    fs: {
+      allow: [".."],
+    },
     proxy: {
       "^/(\\?.*)?$": proxyOptions,
       "^/api(/|(\\?.*)?$)": proxyOptions,

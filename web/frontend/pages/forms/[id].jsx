@@ -16,69 +16,27 @@ import {
   Checkbox,
   ButtonGroup,
   Box,
+  SkeletonBodyText,
+  SkeletonDisplayText,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useParams, useNavigate } from "react-router-dom";
 
 import { FormRenderer } from "../../components/FormRenderer";
+import DevicePreview from "../../components/DevicePreview";
+import ColorControl from "../../components/ColorControl";
 import { apiFetch } from "../../utils/api";
-
-const FIELD_TYPES = [
-  { label: "Text", value: "text" },
-  { label: "Email", value: "email" },
-  { label: "Phone", value: "phone" },
-  { label: "Long text", value: "textarea" },
-  { label: "Number", value: "number" },
-  { label: "Date", value: "date" },
-  { label: "Dropdown", value: "select" },
-  { label: "Radio", value: "radio" },
-  { label: "Checkbox", value: "checkbox" },
-  { label: "Checkbox group", value: "checkbox_group" },
-  { label: "Heading", value: "heading" },
-  { label: "Paragraph", value: "paragraph" },
-];
+import {
+  DEFAULT_STYLES,
+  FIELD_TYPES,
+  createField,
+} from "../../../lib/formDefaults.js";
+import { CSS_CLASS_REFERENCE } from "../../../lib/formStyles.js";
 
 const TYPE_MAP = { phone: "tel" };
 
-function createField(type) {
-  const resolved = TYPE_MAP[type] || type;
-  const base = {
-    id: `field_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    type: resolved,
-    label: "New field",
-    placeholder: "",
-    required: false,
-    width: "full",
-    helpText: "",
-    options: ["Option 1", "Option 2"],
-    defaultValue: "",
-    minLength: null,
-    maxLength: null,
-  };
-  if (resolved === "heading") base.label = "Section heading";
-  if (resolved === "paragraph") base.label = "Add your text here.";
-  if (resolved === "checkbox") base.label = "I agree";
-  return base;
-}
-
-const DEFAULT_STYLES = {
-  backgroundColor: "#ffffff",
-  textColor: "#1a1a1a",
-  labelColor: "#444444",
-  inputBorderColor: "#cccccc",
-  focusBorderColor: "#1a1a1a",
-  buttonBackgroundColor: "#1a1a1a",
-  buttonTextColor: "#ffffff",
-  errorColor: "#b42318",
-  fontFamily: "inherit",
-  labelSize: "14",
-  inputSize: "16",
-  fieldSpacing: "comfortable",
-  maxWidth: "640",
-  borderRadius: "4",
-  inputPadding: "12",
-};
+const BASE_FIELD_TYPES = FIELD_TYPES.filter((f) => f.value !== "file");
 
 export default function FormEditorPage() {
   const { id } = useParams();
@@ -94,20 +52,39 @@ export default function FormEditorPage() {
     apiFetch(`/api/forms/${id}`)
   );
 
+  const { data: planData } = useQuery(["plan"], () => apiFetch("/api/plan"));
+
+  const features = planData?.features || {};
   const form = data?.form;
   const [local, setLocal] = useState(null);
-
   const state = local || form;
 
-  const updateLocal = useCallback((patch) => {
-    setLocal((prev) => {
-      const base = prev || form;
-      return { ...base, ...patch };
-    });
-  }, [form]);
+  const availableFieldTypes = features.fileUpload
+    ? FIELD_TYPES.map((f) => ({
+        label: f.label,
+        value: f.value === "tel" ? "phone" : f.value,
+      }))
+    : BASE_FIELD_TYPES.map((f) => ({
+        label: f.label,
+        value: f.value === "tel" ? "phone" : f.value,
+      }));
+
+  const updateLocal = useCallback(
+    (patch) => {
+      setLocal((prev) => {
+        const base = prev || form;
+        return { ...base, ...patch };
+      });
+    },
+    [form]
+  );
 
   const saveMutation = useMutation(
-    (payload) => apiFetch(`/api/forms/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+    (payload) =>
+      apiFetch(`/api/forms/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["form", id]);
@@ -127,7 +104,7 @@ export default function FormEditorPage() {
       status: state.status,
       schema: state.schema,
       styles: state.styles,
-      customCss: state.customCss,
+      customCss: features.customCss ? state.customCss : "",
     });
   }
 
@@ -156,7 +133,8 @@ export default function FormEditorPage() {
   }
 
   function addField() {
-    const fields = [...(state.schema?.fields || []), createField(addType)];
+    const resolved = TYPE_MAP[addType] || addType;
+    const fields = [...(state.schema?.fields || []), createField(resolved)];
     updateSchema({ fields });
     setAddModal(false);
     setEditingField(fields.length - 1);
@@ -172,6 +150,24 @@ export default function FormEditorPage() {
     return (
       <Page>
         <TitleBar title="Loading..." />
+        <Layout>
+          <Layout.Section variant="oneThird">
+            <Card sectioned>
+              <SkeletonDisplayText size="small" />
+              <Box paddingBlockStart="400">
+                <SkeletonBodyText lines={8} />
+              </Box>
+            </Card>
+          </Layout.Section>
+          <Layout.Section variant="twoThirds">
+            <Card sectioned>
+              <SkeletonDisplayText size="large" />
+              <Box paddingBlockStart="400">
+                <SkeletonBodyText lines={6} />
+              </Box>
+            </Card>
+          </Layout.Section>
+        </Layout>
       </Page>
     );
   }
@@ -182,6 +178,8 @@ export default function FormEditorPage() {
     { id: "design", content: "Design" },
     { id: "advanced", content: "Advanced" },
   ];
+
+  const allowGradients = features.gradients;
 
   return (
     <Page
@@ -213,7 +211,7 @@ export default function FormEditorPage() {
       </TitleBar>
 
       <Layout>
-        <Layout.Section variant="oneHalf">
+        <Layout.Section variant="oneThird">
           <Card>
             <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
               <Box padding="400">
@@ -268,6 +266,17 @@ export default function FormEditorPage() {
                 {selectedTab === 1 && (
                   <Stack vertical spacing="loose">
                     <Button onClick={() => setAddModal(true)}>Add field</Button>
+                    {!features.fileUpload && (
+                      <Banner
+                        status="info"
+                        action={{
+                          content: "View plans",
+                          onAction: () => navigate("/plans"),
+                        }}
+                      >
+                        File upload fields are available on Pro and Premium plans.
+                      </Banner>
+                    )}
                     {(state.schema?.fields || []).map((field, index) => (
                       <Card key={field.id} sectioned>
                         <Stack distribution="equalSpacing" alignment="center">
@@ -294,7 +303,10 @@ export default function FormEditorPage() {
                             >
                               Down
                             </Button>
-                            <Button size="slim" onClick={() => setEditingField(index)}>
+                            <Button
+                              size="slim"
+                              onClick={() => setEditingField(index)}
+                            >
                               Edit
                             </Button>
                             <Button
@@ -313,11 +325,65 @@ export default function FormEditorPage() {
 
                 {selectedTab === 2 && (
                   <FormLayout>
+                    <Text variant="headingSm" as="h3">
+                      Header
+                    </Text>
+                    <ColorControl
+                      label="Header background"
+                      value={state.styles?.headerBackground}
+                      onChange={(v) => updateStyle("headerBackground", v)}
+                      allowGradient={allowGradients}
+                      fallback="transparent"
+                    />
                     <TextField
-                      label="Background color"
-                      value={state.styles?.backgroundColor || ""}
-                      onChange={(v) => updateStyle("backgroundColor", v)}
+                      label="Header padding (px)"
+                      type="number"
+                      value={state.styles?.headerPadding || "0"}
+                      onChange={(v) => updateStyle("headerPadding", v)}
                       autoComplete="off"
+                    />
+                    <TextField
+                      label="Header border radius (px)"
+                      type="number"
+                      value={state.styles?.headerBorderRadius || "0"}
+                      onChange={(v) => updateStyle("headerBorderRadius", v)}
+                      autoComplete="off"
+                    />
+                    <TextField
+                      label="Title color"
+                      value={state.styles?.titleColor || ""}
+                      onChange={(v) => updateStyle("titleColor", v)}
+                      autoComplete="off"
+                    />
+                    <TextField
+                      label="Title size (px)"
+                      type="number"
+                      value={state.styles?.titleSize || "24"}
+                      onChange={(v) => updateStyle("titleSize", v)}
+                      autoComplete="off"
+                    />
+                    <TextField
+                      label="Description color"
+                      value={state.styles?.descriptionColor || ""}
+                      onChange={(v) => updateStyle("descriptionColor", v)}
+                      autoComplete="off"
+                    />
+                    <TextField
+                      label="Description size (px)"
+                      type="number"
+                      value={state.styles?.descriptionSize || "16"}
+                      onChange={(v) => updateStyle("descriptionSize", v)}
+                      autoComplete="off"
+                    />
+
+                    <Text variant="headingSm" as="h3">
+                      Form
+                    </Text>
+                    <ColorControl
+                      label="Background"
+                      value={state.styles?.backgroundColor}
+                      onChange={(v) => updateStyle("backgroundColor", v)}
+                      allowGradient={allowGradients}
                     />
                     <TextField
                       label="Text color"
@@ -331,23 +397,26 @@ export default function FormEditorPage() {
                       onChange={(v) => updateStyle("labelColor", v)}
                       autoComplete="off"
                     />
-                    <TextField
-                      label="Input border color"
-                      value={state.styles?.inputBorderColor || ""}
+                    <ColorControl
+                      label="Input border"
+                      value={state.styles?.inputBorderColor}
                       onChange={(v) => updateStyle("inputBorderColor", v)}
-                      autoComplete="off"
+                      allowGradient={allowGradients}
+                      fallback="#cccccc"
                     />
-                    <TextField
-                      label="Focus border color"
-                      value={state.styles?.focusBorderColor || ""}
+                    <ColorControl
+                      label="Focus border"
+                      value={state.styles?.focusBorderColor}
                       onChange={(v) => updateStyle("focusBorderColor", v)}
-                      autoComplete="off"
+                      allowGradient={allowGradients}
+                      fallback="#1a1a1a"
                     />
-                    <TextField
-                      label="Button color"
-                      value={state.styles?.buttonBackgroundColor || ""}
+                    <ColorControl
+                      label="Button background"
+                      value={state.styles?.buttonBackgroundColor}
                       onChange={(v) => updateStyle("buttonBackgroundColor", v)}
-                      autoComplete="off"
+                      allowGradient={allowGradients}
+                      fallback="#1a1a1a"
                     />
                     <TextField
                       label="Button text color"
@@ -390,19 +459,62 @@ export default function FormEditorPage() {
                       value={state.styles?.fontFamily || "inherit"}
                       onChange={(v) => updateStyle("fontFamily", v)}
                     />
+                    {!allowGradients && (
+                      <Banner
+                        status="info"
+                        action={{
+                          content: "View plans",
+                          onAction: () => navigate("/plans"),
+                        }}
+                      >
+                        Gradient colors are available on Pro and Premium plans.
+                      </Banner>
+                    )}
                   </FormLayout>
                 )}
 
                 {selectedTab === 3 && (
                   <FormLayout>
-                    <TextField
-                      label="Custom CSS"
-                      value={state.customCss || ""}
-                      onChange={(v) => updateLocal({ customCss: v })}
-                      multiline={10}
-                      helpText="Add CSS rules scoped to your form. Example: .integriti-submit { letter-spacing: 1px; }"
-                      autoComplete="off"
-                    />
+                    {features.customCss ? (
+                      <>
+                        <TextField
+                          label="Custom CSS"
+                          value={state.customCss || ""}
+                          onChange={(v) => updateLocal({ customCss: v })}
+                          multiline={10}
+                          helpText="Scope rules to your form. Use field classes like .integriti-field--field_name"
+                          autoComplete="off"
+                        />
+                        <Box
+                          padding="300"
+                          background="bg-surface-secondary"
+                          borderRadius="200"
+                        >
+                          <Text variant="bodySm" as="p" fontWeight="semibold">
+                            CSS class reference
+                          </Text>
+                          <pre
+                            style={{
+                              fontSize: 11,
+                              whiteSpace: "pre-wrap",
+                              margin: "8px 0 0",
+                            }}
+                          >
+                            {CSS_CLASS_REFERENCE}
+                          </pre>
+                        </Box>
+                      </>
+                    ) : (
+                      <Banner
+                        status="info"
+                        action={{
+                          content: "Upgrade",
+                          onAction: () => navigate("/plans"),
+                        }}
+                      >
+                        Custom CSS is available on Pro and Premium plans.
+                      </Banner>
+                    )}
                   </FormLayout>
                 )}
               </Box>
@@ -418,16 +530,20 @@ export default function FormEditorPage() {
           )}
         </Layout.Section>
 
-        <Layout.Section variant="oneHalf">
-          <Card title="Preview" sectioned>
-            <FormRenderer
-              schema={state.schema}
-              styles={state.styles || DEFAULT_STYLES}
-              customCss={state.customCss}
-              formId={state.id}
-              preview
-            />
-          </Card>
+        <Layout.Section variant="twoThirds">
+          <div style={{ position: "sticky", top: "16px" }}>
+            <Card title="Preview" sectioned>
+              <DevicePreview>
+                <FormRenderer
+                  schema={state.schema}
+                  styles={state.styles || DEFAULT_STYLES}
+                  customCss={features.customCss ? state.customCss : ""}
+                  formId={state.id}
+                  preview
+                />
+              </DevicePreview>
+            </Card>
+          </div>
         </Layout.Section>
       </Layout>
 
@@ -443,7 +559,7 @@ export default function FormEditorPage() {
         <Modal.Section>
           <Select
             label="Field type"
-            options={FIELD_TYPES}
+            options={availableFieldTypes}
             value={addType}
             onChange={setAddType}
           />
@@ -485,7 +601,7 @@ function FieldEditorModal({ field, onClose, onSave }) {
             onChange={(v) => setLocal({ ...local, label: v })}
             autoComplete="off"
           />
-          {!isStatic && (
+          {!isStatic && field.type !== "file" && (
             <>
               <TextField
                 label="Placeholder"
@@ -512,6 +628,21 @@ function FieldEditorModal({ field, onClose, onSave }) {
                 ]}
                 value={local.width || "full"}
                 onChange={(v) => setLocal({ ...local, width: v })}
+              />
+            </>
+          )}
+          {field.type === "file" && (
+            <>
+              <TextField
+                label="Help text"
+                value={local.helpText || ""}
+                onChange={(v) => setLocal({ ...local, helpText: v })}
+                autoComplete="off"
+              />
+              <Checkbox
+                label="Required"
+                checked={local.required}
+                onChange={(v) => setLocal({ ...local, required: v })}
               />
             </>
           )}

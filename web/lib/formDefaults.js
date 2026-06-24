@@ -14,6 +14,15 @@ export const DEFAULT_STYLES = {
   maxWidth: "640",
   borderRadius: "4",
   inputPadding: "12",
+  headerBackground: "transparent",
+  headerPadding: "0",
+  headerBorderRadius: "0",
+  titleColor: "#1a1a1a",
+  titleSize: "24",
+  titleWeight: "600",
+  descriptionColor: "#1a1a1a",
+  descriptionSize: "16",
+  descriptionOpacity: "0.85",
 };
 
 export const DEFAULT_FORM_SCHEMA = {
@@ -75,6 +84,7 @@ export const FIELD_TYPES = [
   { value: "radio", label: "Radio buttons" },
   { value: "checkbox", label: "Single checkbox" },
   { value: "checkbox_group", label: "Checkbox group" },
+  { value: "file", label: "File upload" },
   { value: "heading", label: "Heading" },
   { value: "paragraph", label: "Paragraph" },
 ];
@@ -105,6 +115,16 @@ export function createField(type) {
   if (type === "checkbox") {
     base.label = "I agree to the terms";
   }
+  if (type === "file") {
+    base.label = "Upload file";
+    base.placeholder = "Choose a file";
+    base.helpText = "Maximum file size: 2 MB.";
+  }
 
   return base;
+}
+
+export function fieldClassName(field) {
+  const width = field.width === "half" ? "integriti-field--half" : "integriti-field--full";
+  return `integriti-field integriti-field--${field.id} integriti-field--${field.type} ${width}`;
 }

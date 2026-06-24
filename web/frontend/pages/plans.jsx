@@ -8,6 +8,7 @@ import {
   Stack,
   Badge,
   Banner,
+  SkeletonBodyText,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
@@ -19,23 +20,41 @@ const PLAN_DETAILS = [
     key: "free",
     name: "Free",
     price: "$0",
-    features: ["Up to 3 active forms", "Unlimited submissions", "Email notifications", "Theme embed"],
+    features: [
+      "Up to 3 active forms",
+      "Unlimited submissions",
+      "Email notifications",
+      "Theme embed",
+      "Basic form styling",
+    ],
   },
   {
     key: "pro",
     name: "Pro",
     price: "$15/mo",
-    billingKey: "Pro",
-    features: ["Unlimited forms", "Unlimited submissions", "Email notifications", "Theme embed"],
+    features: [
+      "Unlimited forms",
+      "Image file uploads",
+      "Custom CSS",
+      "Gradient colors",
+      "Header & title styling",
+      "Email notifications with attachments",
+    ],
   },
   {
     key: "premium",
     name: "Premium",
     price: "$20/mo",
-    billingKey: "Premium",
-    features: ["Unlimited forms", "Unlimited submissions", "Email notifications", "Theme embed"],
+    features: [
+      "Everything in Pro",
+      "PDF & Word document uploads",
+      "Images + documents (no zip files)",
+      "Priority support",
+    ],
   },
 ];
+
+const IS_DEV = import.meta.env.DEV;
 
 export default function PlansPage() {
   const queryClient = useQueryClient();
@@ -43,27 +62,16 @@ export default function PlansPage() {
 
   const { data, isLoading } = useQuery(["plan"], () => apiFetch("/api/plan"));
 
-  const syncMutation = useMutation(() => apiFetch("/api/billing/status"), {
-    onSuccess: () => queryClient.invalidateQueries(["plan"]),
-  });
-
-  const subscribeMutation = useMutation(
+  const devActivateMutation = useMutation(
     (plan) =>
-      apiFetch("/api/billing/subscribe", {
+      apiFetch("/api/billing/dev/activate", {
         method: "POST",
         body: JSON.stringify({ plan }),
       }),
     {
       onSuccess: (result) => {
-        if (result.redirecting) {
-          setMessage({
-            status: "info",
-            text: "Complete the billing approval in Shopify to activate your plan.",
-          });
-        } else {
-          queryClient.invalidateQueries(["plan"]);
-          setMessage({ status: "success", text: "Plan updated." });
-        }
+        queryClient.invalidateQueries(["plan"]);
+        setMessage({ status: "success", text: `Plan set to ${result.plan}.` });
       },
       onError: (err) => setMessage({ status: "critical", text: err.message }),
     }
@@ -84,28 +92,39 @@ export default function PlansPage() {
           </Layout.Section>
         )}
 
-        {data && (
+        {IS_DEV && (
+          <Layout.Section>
+            <Banner status="info">
+              Development mode: use the buttons below to switch plans and test
+              Pro/Premium features. Paid billing is not available for custom
+              apps until the app is published.
+            </Banner>
+          </Layout.Section>
+        )}
+
+        {isLoading ? (
           <Layout.Section>
             <Card sectioned>
-              <Stack spacing="tight">
-                <Text>
-                  Current plan: <Badge>{currentPlan}</Badge>
-                </Text>
-                <Text color="subdued">
-                  {data.usage.activeForms} active forms
-                  {data.plan === "free" &&
-                    ` of ${data.usage.formLimit} allowed`}
-                </Text>
-                <Button
-                  size="slim"
-                  loading={syncMutation.isLoading}
-                  onClick={() => syncMutation.mutate()}
-                >
-                  Sync billing status
-                </Button>
-              </Stack>
+              <SkeletonBodyText lines={4} />
             </Card>
           </Layout.Section>
+        ) : (
+          data && (
+            <Layout.Section>
+              <Card sectioned>
+                <Stack spacing="tight">
+                  <Text>
+                    Current plan: <Badge>{currentPlan}</Badge>
+                  </Text>
+                  <Text color="subdued">
+                    {data.usage.activeForms} active forms
+                    {data.plan === "free" &&
+                      ` of ${data.usage.formLimit} allowed`}
+                  </Text>
+                </Stack>
+              </Card>
+            </Layout.Section>
+          )
         )}
 
         <Layout.Section>
@@ -138,19 +157,15 @@ export default function PlansPage() {
                     </Stack>
                     {isCurrent ? (
                       <Badge status="success">Current plan</Badge>
-                    ) : plan.billingKey ? (
+                    ) : IS_DEV ? (
                       <Button
-                        primary
-                        loading={subscribeMutation.isLoading}
-                        onClick={() => subscribeMutation.mutate(plan.billingKey)}
+                        primary={plan.key !== "free"}
+                        loading={devActivateMutation.isLoading}
+                        onClick={() => devActivateMutation.mutate(plan.key)}
                       >
-                        Upgrade to {plan.name}
+                        Switch to {plan.name}
                       </Button>
-                    ) : (
-                      <Text color="subdued" variant="bodySm">
-                        Default plan
-                      </Text>
-                    )}
+                    ) : null}
                   </Stack>
                 </Card>
               );

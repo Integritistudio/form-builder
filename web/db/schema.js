@@ -45,3 +45,21 @@ export const submissions = pgTable("submissions", {
   payload: jsonb("payload").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+export const submissionFiles = pgTable("submission_files", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  submissionId: uuid("submission_id").references(() => submissions.id, {
+    onDelete: "cascade",
+  }),
+  formId: uuid("form_id")
+    .notNull()
+    .references(() => forms.id, { onDelete: "cascade" }),
+  shopDomain: varchar("shop_domain", { length: 255 }).notNull(),
+  fieldId: varchar("field_id", { length: 255 }).notNull(),
+  originalName: varchar("original_name", { length: 512 }).notNull(),
+  mimeType: varchar("mime_type", { length: 128 }).notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  storageKey: varchar("storage_key", { length: 1024 }).notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});

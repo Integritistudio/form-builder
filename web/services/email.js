@@ -1,6 +1,9 @@
 import nodemailer from "nodemailer";
 import { decrypt } from "../lib/encryption.js";
 import { formatSubmissionForDisplay } from "../lib/validation.js";
+import { getFileBuffer } from "./storage.js";
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 function buildHtml({ formName, shopName, rows, submittedAt }) {
   const rowsHtml = rows
@@ -43,20 +46,64 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+export function formatSmtpError(err) {
+  const code = err.code || "";
+  const host = err.hostname || err.address || "";
+
+  if (["EDNS", "ENOTFOUND", "ETIMEOUT", "ESOCKET", "ECONNREFUSED"].includes(code)) {
+    return `Could not reach the SMTP server${host ? ` (${host})` : ""}. Check the host and port, disable VPN/firewall blocks on outbound SMTP, and verify your internet connection. For Gmail, use an App Password on port 587.`;
+  }
+  if (code === "EAUTH") {
+    return "SMTP login failed. Verify your username and password. Gmail and Yahoo require an App Password when 2FA is enabled.";
+  }
+  if (code === "ETIMEDOUT") {
+    return "SMTP connection timed out. Try port 465 with TLS/SSL enabled, or check if your network blocks SMTP ports.";
+  }
+  return err.message || "Failed to send email.";
+}
+
 export function createTransporter(settings) {
   if (!settings.smtpHost || !settings.emailTo) return null;
 
   const password = settings.smtpPass ? decrypt(settings.smtpPass) : undefined;
+  const port = settings.smtpPort || 587;
+  const secure = Boolean(settings.smtpSecure);
 
   return nodemailer.createTransport({
     host: settings.smtpHost,
-    port: settings.smtpPort || 587,
-    secure: settings.smtpSecure || false,
+    port,
+    secure,
+    requireTLS: !secure && port === 587,
     auth:
       settings.smtpUser && password
         ? { user: settings.smtpUser, pass: password }
         : undefined,
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 30000,
+    tls: { minVersion: "TLSv1.2" },
   });
+}
+
+async function buildAttachments(files) {
+  const attachments = [];
+  for (const file of files) {
+    if (file.sizeBytes > MAX_ATTACHMENT_BYTES) {
+      console.warn(`Skipping attachment ${file.originalName}: exceeds size limit`);
+      continue;
+    }
+    try {
+      const content = await getFileBuffer(file.storageKey);
+      attachments.push({
+        filename: file.originalName,
+        content,
+        contentType: file.mimeType,
+      });
+    } catch (err) {
+      console.error(`Failed to attach ${file.originalName}:`, err);
+    }
+  }
+  return attachments;
 }
 
 export async function sendSubmissionEmail({
@@ -65,6 +112,7 @@ export async function sendSubmissionEmail({
   shopName,
   schema,
   payload,
+  files = [],
 }) {
   const transporter = createTransporter(settings);
   if (!transporter) return { sent: false, reason: "SMTP not configured" };
@@ -77,6 +125,7 @@ export async function sendSubmissionEmail({
 
   const text = rows.map((r) => `${r.label}: ${r.value}`).join("\n");
   const html = buildHtml({ formName, shopName, rows, submittedAt });
+  const attachments = await buildAttachments(files);
 
   const mailOptions = {
     from: settings.smtpUser || settings.emailTo,
@@ -85,10 +134,16 @@ export async function sendSubmissionEmail({
     subject: `New submission: ${formName}`,
     text: `New submission for ${formName}\n\n${text}\n\nSubmitted ${submittedAt}`,
     html,
+    attachments,
   };
 
-  await transporter.sendMail(mailOptions);
-  return { sent: true };
+  try {
+    await transporter.sendMail(mailOptions);
+    return { sent: true };
+  } catch (err) {
+    console.error("Submission email failed:", err);
+    return { sent: false, reason: formatSmtpError(err) };
+  }
 }
 
 export async function sendTestEmail(settings) {
@@ -97,11 +152,29 @@ export async function sendTestEmail(settings) {
     throw new Error("SMTP is not fully configured. Set host and recipient email.");
   }
 
-  await transporter.sendMail({
-    from: settings.smtpUser || settings.emailTo,
-    to: settings.emailTo,
-    subject: "Integriti Forms — test email",
-    text: "Your SMTP settings are working correctly.",
-    html: "<p>Your SMTP settings are working correctly.</p>",
-  });
+  if (!settings.smtpPass) {
+    throw new Error("SMTP password is required. Save your password in settings first.");
+  }
+
+  if (!settings.smtpUser) {
+    throw new Error("SMTP username is required (usually your full email address).");
+  }
+
+  try {
+    await transporter.verify();
+  } catch (err) {
+    throw new Error(formatSmtpError(err));
+  }
+
+  try {
+    await transporter.sendMail({
+      from: settings.smtpUser || settings.emailTo,
+      to: settings.emailTo,
+      subject: "Integriti Forms — test email",
+      text: "Your SMTP settings are working correctly.",
+      html: "<p>Your SMTP settings are working correctly.</p>",
+    });
+  } catch (err) {
+    throw new Error(formatSmtpError(err));
+  }
 }

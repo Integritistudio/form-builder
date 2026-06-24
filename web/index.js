@@ -13,6 +13,7 @@ import settingsRouter from "./routes/settings.js";
 import planRouter from "./routes/plan.js";
 import billingRouter from "./routes/billing.js";
 import publicRouter from "./routes/public.js";
+import submissionsRouter from "./routes/submissions.js";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
@@ -25,6 +26,8 @@ const STATIC_PATH =
     : `${process.cwd()}/frontend/`;
 
 const app = express();
+
+app.set("trust proxy", 1);
 
 await runMigrations();
 
@@ -49,6 +52,7 @@ app.use("/api/forms", formsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/plan", planRouter);
 app.use("/api/billing", billingRouter);
+app.use("/api/submissions", submissionsRouter);
 
 app.use(shopify.cspHeaders());
 app.use(serveStatic(STATIC_PATH, { index: false }));

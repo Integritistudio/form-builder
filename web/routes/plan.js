@@ -3,7 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { forms } from "../db/schema.js";
 import { getShopSettings } from "../services/shop.js";
-import { PLANS, getFormLimit } from "../services/plans.js";
+import { PLANS, getFormLimit, getPlanFeatures } from "../services/plans.js";
 
 const router = Router();
 
@@ -31,6 +31,7 @@ router.get("/", async (req, res) => {
     res.json({
       plan: settings.plan,
       plans: PLANS,
+      features: getPlanFeatures(settings.plan),
       usage: {
         totalForms: total,
         activeForms: active,
