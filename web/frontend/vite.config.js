@@ -57,6 +57,7 @@ export default defineConfig({
     proxy: {
       "^/(\\?.*)?$": proxyOptions,
       "^/api(/|(\\?.*)?$)": proxyOptions,
+      "^/apps/integriti-forms(/|(\\?.*)?$)": proxyOptions,
     },
   },
 });

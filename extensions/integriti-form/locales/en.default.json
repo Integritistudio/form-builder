@@ -1,0 +1,13 @@
+{
+  "blocks": {
+    "form": {
+      "name": "Integriti Form",
+      "settings": {
+        "form_id": {
+          "label": "Form ID",
+          "info": "Paste the Form ID from your Integriti Forms app."
+        }
+      }
+    }
+  }
+}

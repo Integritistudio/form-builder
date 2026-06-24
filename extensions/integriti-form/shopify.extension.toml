@@ -1,0 +1,8 @@
+api_version = "2024-10"
+
+[[extensions]]
+name = "integriti-form"
+handle = "integriti-form"
+
+uid = "a42e0846-0b1c-b65d-ba89-c6f28de94a3bfbfe42e4"
+type = "theme"
