@@ -1,28 +1,33 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Page,
   Layout,
-  Card,
-  IndexTable,
+  Banner,
+  Modal,
   Text,
-  Badge,
   Button,
   EmptyState,
-  Banner,
-  Stack,
-  Modal,
-  useIndexResourceState,
-  SkeletonBodyText,
-  SkeletonDisplayText,
-  Box,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useNavigate } from "react-router-dom";
 
 import { apiFetch } from "../utils/api";
+import { AppShell } from "../components/layout";
+import {
+  IconDocument,
+  IconCalendar,
+  IconForms,
+  IconStar,
+  IconSearch,
+  IconCopy,
+  IconCheck,
+  IconDelete,
+  IconSparkle,
+  IconPalette,
+} from "../components/dashboard/DashboardIcons";
 
-function CopyButton({ text }) {
+function CopyIdButton({ text }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -32,29 +37,46 @@ function CopyButton({ text }) {
   }
 
   return (
-    <Button size="slim" onClick={copy}>
-      {copied ? "Copied" : "Copy ID"}
-    </Button>
+    <button
+      type="button"
+      className={`app-icon-btn${copied ? " app-icon-btn--success" : ""}`}
+      onClick={copy}
+      title="Copy ID"
+      aria-label="Copy form ID"
+    >
+      {copied ? <IconCheck /> : <IconCopy />}
+    </button>
   );
 }
 
-function AnalyticsCards({ analytics, loading }) {
+function Sparkline({ dailyCounts }) {
+  const max = Math.max(...(dailyCounts || []).map((d) => d.count), 1);
+  const counts = dailyCounts || [];
+
+  return (
+    <div className="app-sparkline" aria-hidden>
+      {counts.map((d, i) => {
+        const pct = Math.max(8, (d.count / max) * 100);
+        const isLast = i === counts.length - 1;
+        return (
+          <div
+            key={d.date}
+            className={`app-sparkline-bar${isLast ? " app-sparkline-bar--active" : ""}`}
+            style={{ height: `${pct}%` }}
+            title={`${d.date}: ${d.count}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function StatsGrid({ analytics, loading }) {
   if (loading) {
     return (
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "16px",
-        }}
-      >
+      <div className="app-stats">
         {[1, 2, 3, 4].map((i) => (
-          <Card key={i} sectioned>
-            <SkeletonDisplayText size="small" />
-            <Box paddingBlockStart="200">
-              <SkeletonBodyText lines={1} />
-            </Box>
-          </Card>
+          <div key={i} className="app-skeleton-stat" />
         ))}
       </div>
     );
@@ -62,76 +84,271 @@ function AnalyticsCards({ analytics, loading }) {
 
   if (!analytics) return null;
 
-  const maxDaily = Math.max(...(analytics.dailyCounts || []).map((d) => d.count), 1);
+  return (
+    <div className="app-stats">
+      <div className="app-stat-card">
+        <div className="app-stat-header">
+          <span className="app-stat-label">Total submissions</span>
+          <span className="app-stat-icon">
+            <IconDocument />
+          </span>
+        </div>
+        <div className="app-stat-value">{analytics.totalSubmissions}</div>
+        <div className="app-stat-footer app-stat-footer-muted">
+          Across all forms
+        </div>
+      </div>
+
+      <div className="app-stat-card">
+        <div className="app-stat-header">
+          <span className="app-stat-label">Submissions this week</span>
+          <span className="app-stat-icon">
+            <IconCalendar />
+          </span>
+        </div>
+        <div className="app-sparkline-wrap">
+          <div className="app-stat-value">{analytics.weekSubmissions}</div>
+          <Sparkline dailyCounts={analytics.dailyCounts} />
+        </div>
+      </div>
+
+      <div className="app-stat-card">
+        <div className="app-stat-header">
+          <span className="app-stat-label">Active forms</span>
+          <span className="app-stat-icon">
+            <IconForms />
+          </span>
+        </div>
+        <div className="app-stat-value">{analytics.activeForms}</div>
+        <div className="app-stat-footer app-stat-footer-muted">
+          Healthy form status
+        </div>
+      </div>
+
+      <div className="app-stat-card">
+        <div className="app-stat-header">
+          <span className="app-stat-label">Top form</span>
+          <span className="app-stat-icon">
+            <IconStar />
+          </span>
+        </div>
+        <div className="app-stat-value app-stat-value-sm">
+          {analytics.topForm?.formName || "—"}
+        </div>
+        {analytics.topForm && (
+          <div className="app-stat-footer app-stat-footer-muted">
+            {analytics.topForm.count} submissions
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FormsTable({
+  forms,
+  loading,
+  search,
+  onSearchChange,
+  onEdit,
+  onSubmissions,
+  onDelete,
+}) {
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return forms;
+    return forms.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.id.toLowerCase().includes(q) ||
+        f.status.toLowerCase().includes(q)
+    );
+  }, [forms, search]);
+
+  if (loading) {
+    return (
+      <div className="app-panel">
+        <div className="app-panel-header">
+          <h2 className="app-panel-title">All Forms</h2>
+        </div>
+        <div className="app-empty">
+          <Text color="subdued">Loading forms…</Text>
+        </div>
+      </div>
+    );
+  }
+
+  if (forms.length === 0) {
+    return null;
+  }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-        gap: "16px",
-      }}
-    >
-      <Card sectioned>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodySm" color="subdued">
-            Total submissions
-          </Text>
-          <Text variant="headingLg" as="p">
-            {analytics.totalSubmissions}
-          </Text>
-        </Stack>
-      </Card>
-      <Card sectioned>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodySm" color="subdued">
-            This week
-          </Text>
-          <Text variant="headingLg" as="p">
-            {analytics.weekSubmissions}
-          </Text>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 32 }}>
-            {(analytics.dailyCounts || []).map((d) => (
-              <div
-                key={d.date}
-                title={`${d.date}: ${d.count}`}
-                style={{
-                  flex: 1,
-                  height: `${Math.max(4, (d.count / maxDaily) * 100)}%`,
-                  background: "#2c6ecb",
-                  borderRadius: 2,
-                  minHeight: 4,
-                }}
-              />
-            ))}
+    <div className="app-panel">
+      <div className="app-panel-header">
+        <h2 className="app-panel-title">All Forms</h2>
+        <div className="app-panel-toolbar">
+          <div className="app-search">
+            <span className="app-search-icon">
+              <IconSearch />
+            </span>
+            <input
+              type="search"
+              placeholder="Search forms..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              aria-label="Search forms"
+            />
           </div>
-        </Stack>
-      </Card>
-      <Card sectioned>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodySm" color="subdued">
-            Active forms
-          </Text>
-          <Text variant="headingLg" as="p">
-            {analytics.activeForms}
-          </Text>
-        </Stack>
-      </Card>
-      <Card sectioned>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodySm" color="subdued">
-            Top form
-          </Text>
-          <Text variant="headingMd" as="p">
-            {analytics.topForm?.formName || "—"}
-          </Text>
-          {analytics.topForm && (
-            <Text variant="bodySm" color="subdued">
-              {analytics.topForm.count} submissions
-            </Text>
-          )}
-        </Stack>
-      </Card>
+        </div>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table className="app-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Form ID</th>
+              <th className="app-text-center">Submissions</th>
+              <th>Created</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: "center", padding: 32 }}>
+                  <Text color="subdued">No forms match your search.</Text>
+                </td>
+              </tr>
+            ) : (
+              filtered.map((form) => (
+                <tr key={form.id}>
+                  <td>
+                    <button
+                      type="button"
+                      className="app-form-link"
+                      onClick={() => onEdit(form.id)}
+                    >
+                      {form.name}
+                    </button>
+                  </td>
+                  <td>
+                    <span
+                      className={`app-status app-status--${
+                        form.status === "active" ? "active" : "draft"
+                      }`}
+                    >
+                      {form.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="app-id-cell">
+                      <code>{form.id.slice(0, 8)}…</code>
+                      <CopyIdButton text={form.id} />
+                    </div>
+                  </td>
+                  <td className="app-text-center">
+                    {form.submissionCount ?? 0}
+                  </td>
+                  <td style={{ color: "var(--app-on-surface-variant)" }}>
+                    {form.createdAt
+                      ? new Date(form.createdAt).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td>
+                    <div className="app-actions">
+                      <button
+                        type="button"
+                        className="app-btn-outline"
+                        onClick={() => onSubmissions(form.id)}
+                      >
+                        Submissions
+                      </button>
+                      <button
+                        type="button"
+                        className="app-icon-btn app-icon-btn--danger"
+                        onClick={() => onDelete(form.id)}
+                        title="Delete form"
+                        aria-label="Delete form"
+                      >
+                        <IconDelete />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="app-panel-footer">
+        <span>
+          Showing {filtered.length} of {forms.length} form
+          {forms.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ThemeGuide({ onPlans }) {
+  return (
+    <div className="app-bottom-grid">
+      <div className="app-guide">
+        <div className="app-guide-header">
+          <div className="app-guide-icon">
+            <IconSparkle />
+          </div>
+          <h3 className="app-panel-title">Add form to your theme</h3>
+        </div>
+        <div className="app-guide-steps">
+          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            <li className="app-step" style={{ marginBottom: 16 }}>
+              <span className="app-step-num">1</span>
+              <p>
+                Open <strong>Online Store</strong> → Themes → Customize
+              </p>
+            </li>
+            <li className="app-step">
+              <span className="app-step-num">2</span>
+              <p>
+                Add a section or block and choose{" "}
+                <strong>Integriti Form</strong>
+              </p>
+            </li>
+          </ol>
+          <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            <li className="app-step" style={{ marginBottom: 16 }}>
+              <span className="app-step-num">3</span>
+              <p>
+                Paste your <strong>Form ID</strong> into the block setting
+              </p>
+            </li>
+            <li className="app-step">
+              <span className="app-step-num">4</span>
+              <p>Save the theme to go live</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div className="app-promo">
+        <div>
+          <h4>Need custom styling?</h4>
+          <p>
+            Upgrade to Pro for custom CSS, gradients, multi-step forms, file uploads, and advanced
+            form styling on your storefront.
+          </p>
+        </div>
+        <button type="button" className="app-promo-btn" onClick={onPlans}>
+          View plans
+        </button>
+        <div className="app-promo-deco" aria-hidden>
+          <IconPalette />
+        </div>
+      </div>
     </div>
   );
 }
@@ -140,6 +357,7 @@ export default function FormsIndexPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState(null);
+  const [search, setSearch] = useState("");
 
   const { data: formsData, isLoading } = useQuery(["forms"], () =>
     apiFetch("/api/forms")
@@ -172,162 +390,131 @@ export default function FormsIndexPage() {
   );
 
   const forms = formsData?.forms || [];
-  const resourceName = { singular: "form", plural: "forms" };
-  const { selectedResources, allResourcesSelected, handleSelectionChange } =
-    useIndexResourceState(forms);
-
-  const rowMarkup = forms.map((form, index) => (
-    <IndexTable.Row
-      id={form.id}
-      key={form.id}
-      position={index}
-      selected={selectedResources.includes(form.id)}
-    >
-      <IndexTable.Cell>
-        <Button plain onClick={() => navigate(`/forms/${form.id}`)}>
-          {form.name}
-        </Button>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Badge status={form.status === "active" ? "success" : "info"}>
-          {form.status}
-        </Badge>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Stack spacing="tight">
-          <Text as="span" variant="bodySm">
-            <code>{form.id.slice(0, 8)}...</code>
-          </Text>
-          <CopyButton text={form.id} />
-        </Stack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>{form.submissionCount ?? 0}</IndexTable.Cell>
-      <IndexTable.Cell>
-        {form.createdAt
-          ? new Date(form.createdAt).toLocaleDateString()
-          : "—"}
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Stack spacing="tight">
-          <Button
-            size="slim"
-            onClick={() => navigate(`/forms/${form.id}/submissions`)}
-          >
-            Submissions
-          </Button>
-          <Button size="slim" destructive onClick={() => setDeleteId(form.id)}>
-            Delete
-          </Button>
-        </Stack>
-      </IndexTable.Cell>
-    </IndexTable.Row>
-  ));
 
   const atLimit =
     planData?.plan === "free" &&
     planData?.usage?.totalForms >= planData?.usage?.formLimit;
 
+  const lastUpdated = new Date().toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   return (
-    <Page>
-      <TitleBar title="Integriti Forms">
-        <button
-          variant="primary"
-          disabled={atLimit || createMutation.isLoading}
-          onClick={() => createMutation.mutate()}
-        >
-          Create form
-        </button>
-      </TitleBar>
+    <AppShell>
+      <Page fullWidth>
+        <TitleBar title="Integriti Forms">
+          <button
+            variant="primary"
+            disabled={atLimit || createMutation.isLoading}
+            onClick={() => createMutation.mutate()}
+          >
+            Create form
+          </button>
+        </TitleBar>
 
-      <Layout>
-        {planData && !planData.smtpConfigured && (
-          <Layout.Section>
-            <Banner
-              status="warning"
-              action={{ content: "Email settings", onAction: () => navigate("/settings") }}
-            >
-              SMTP is not configured. Submissions will be saved but emails will not be sent.
-            </Banner>
-          </Layout.Section>
-        )}
-
-        {atLimit && (
-          <Layout.Section>
-            <Banner
-              status="info"
-              action={{ content: "View plans", onAction: () => navigate("/plans") }}
-            >
-              You have reached the free plan limit of 3 forms. Upgrade for unlimited forms.
-            </Banner>
-          </Layout.Section>
-        )}
-
-        <Layout.Section>
-          <AnalyticsCards analytics={analytics} loading={analyticsLoading} />
-        </Layout.Section>
-
-        <Layout.Section>
-          <Card>
-            {forms.length === 0 && !isLoading ? (
-              <EmptyState
-                heading="Create your first form"
+        <Layout>
+          {planData && !planData.smtpConfigured && (
+            <Layout.Section>
+              <Banner
+                status="warning"
                 action={{
-                  content: "Create form",
-                  onAction: () => createMutation.mutate(),
+                  content: "Email settings",
+                  onAction: () => navigate("/settings"),
                 }}
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
-                <p>Build a custom form and add it to your storefront with a Form ID.</p>
-              </EmptyState>
+                SMTP is not configured. Submissions will be saved but emails
+                will not be sent.
+              </Banner>
+            </Layout.Section>
+          )}
+
+          {atLimit && (
+            <Layout.Section>
+              <Banner
+                status="info"
+                action={{
+                  content: "View plans",
+                  onAction: () => navigate("/plans"),
+                }}
+              >
+                You have reached the free plan limit of 3 forms. Upgrade for
+                unlimited forms.
+              </Banner>
+            </Layout.Section>
+          )}
+
+          <Layout.Section>
+            <div className="app-hero">
+              <div>
+                <h1>Form Overview</h1>
+                <p>
+                  Manage your interactive forms and track submissions in
+                  real-time.
+                </p>
+              </div>
+              <div className="app-hero-meta">
+                Last updated: {lastUpdated}
+              </div>
+            </div>
+
+            <StatsGrid analytics={analytics} loading={analyticsLoading} />
+
+            {forms.length === 0 && !isLoading ? (
+              <div className="app-panel">
+                <div className="app-empty">
+                  <EmptyState
+                    heading="Create your first form"
+                    action={{
+                      content: "Create form",
+                      onAction: () => createMutation.mutate(),
+                    }}
+                    image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+                  >
+                    <p>
+                      Build a custom form and add it to your storefront with a
+                      Form ID.
+                    </p>
+                  </EmptyState>
+                </div>
+              </div>
             ) : (
-              <IndexTable
-                resourceName={resourceName}
-                itemCount={forms.length}
-                selectedItemsCount={selectedResources.length}
-                onSelectionChange={handleSelectionChange}
-                headings={[
-                  { title: "Name" },
-                  { title: "Status" },
-                  { title: "Form ID" },
-                  { title: "Submissions" },
-                  { title: "Created" },
-                  { title: "Actions" },
-                ]}
+              <FormsTable
+                forms={forms}
                 loading={isLoading}
-              >
-                {rowMarkup}
-              </IndexTable>
+                search={search}
+                onSearchChange={setSearch}
+                onEdit={(id) => navigate(`/forms/${id}`)}
+                onSubmissions={(id) => navigate(`/forms/${id}/submissions`)}
+                onDelete={setDeleteId}
+              />
             )}
-          </Card>
-        </Layout.Section>
 
-        <Layout.Section>
-          <Card title="Add form to your theme" sectioned>
-            <Stack vertical spacing="tight">
-              <Text>1. Open Online Store → Themes → Customize</Text>
-              <Text>2. Add a section or block and choose Integriti Form</Text>
-              <Text>3. Paste your Form ID into the block setting</Text>
-              <Text>4. Save the theme</Text>
-            </Stack>
-          </Card>
-        </Layout.Section>
-      </Layout>
+            <ThemeGuide onPlans={() => navigate("/plans")} />
+          </Layout.Section>
+        </Layout>
 
-      <Modal
-        open={Boolean(deleteId)}
-        onClose={() => setDeleteId(null)}
-        title="Delete form"
-        primaryAction={{
-          content: "Delete",
-          destructive: true,
-          onAction: () => deleteMutation.mutate(deleteId),
-        }}
-        secondaryActions={[{ content: "Cancel", onAction: () => setDeleteId(null) }]}
-      >
-        <Modal.Section>
-          <Text>This will permanently delete the form and all its submissions.</Text>
-        </Modal.Section>
-      </Modal>
-    </Page>
+        <Modal
+          open={Boolean(deleteId)}
+          onClose={() => setDeleteId(null)}
+          title="Delete form"
+          primaryAction={{
+            content: "Delete",
+            destructive: true,
+            onAction: () => deleteMutation.mutate(deleteId),
+          }}
+          secondaryActions={[
+            { content: "Cancel", onAction: () => setDeleteId(null) },
+          ]}
+        >
+          <Modal.Section>
+            <Text>
+              This will permanently delete the form and all its submissions.
+            </Text>
+          </Modal.Section>
+        </Modal>
+      </Page>
+    </AppShell>
   );
 }

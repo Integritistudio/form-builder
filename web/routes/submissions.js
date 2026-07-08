@@ -153,6 +153,37 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/files/:fileId/access", async (req, res) => {
+  try {
+    const shopDomain = getShop(res);
+    const [file] = await db
+      .select()
+      .from(submissionFiles)
+      .where(
+        and(
+          eq(submissionFiles.id, req.params.fileId),
+          eq(submissionFiles.shopDomain, shopDomain)
+        )
+      )
+      .limit(1);
+
+    if (!file) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    const publicUrl = await createPresignedDownloadUrl(file.storageKey, 3600);
+    res.json({
+      publicUrl,
+      originalName: file.originalName,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/files/:fileId/download", async (req, res) => {
   try {
     const shopDomain = getShop(res);
@@ -171,12 +202,12 @@ router.get("/files/:fileId/download", async (req, res) => {
       return res.status(404).json({ error: "File not found" });
     }
 
-    const url = await createPresignedDownloadUrl(file.storageKey, 3600);
+    const publicUrl = await createPresignedDownloadUrl(file.storageKey, 3600);
     res.json({
-      url,
+      url: publicUrl,
+      publicUrl,
       originalName: file.originalName,
       mimeType: file.mimeType,
-      viewUrl: `/api/submissions/files/${file.id}/view`,
     });
   } catch (err) {
     console.error(err);

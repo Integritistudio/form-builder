@@ -4,11 +4,10 @@ import {
   Stack,
   Badge,
   Button,
-  Box,
   Divider,
 } from "@shopify/polaris";
 
-import { fileViewPath } from "./FilePreviewModal";
+import { formatFileSize, openFileInNewTab, downloadFile } from "../utils/files";
 
 export function getFieldLabel(schema, fieldId) {
   const field = schema?.fields?.find((f) => f.id === fieldId);
@@ -28,12 +27,6 @@ export function formatFieldValue(value, fieldType) {
     return value.originalName;
   }
   return String(value);
-}
-
-export function getFileViewUrl(value) {
-  if (!value?.fileId && !value?.id) return null;
-  const fileId = value.fileId || value.id;
-  return value.viewUrl || fileViewPath(fileId);
 }
 
 export function orderedPayloadEntries(schema, payload) {
@@ -76,37 +69,100 @@ export function submissionPreview(schema, payload, files = []) {
   return formatFieldValue(value, field?.type).slice(0, 50);
 }
 
-function FileActions({ file, onViewFile, onDownloadFile }) {
+function FileAttachmentCard({ file, fieldLabel }) {
   const fileId = file.fileId || file.id;
-  const fileName = file.originalName;
-  const mimeType = file.mimeType;
-  const viewUrl = getFileViewUrl(file);
+  const isImage = file.mimeType?.startsWith("image/");
+  const isPdf = file.mimeType === "application/pdf";
+  const publicUrl = file.publicUrl;
 
   return (
-    <Stack vertical spacing="tight">
-      <Text variant="bodyMd">{fileName}</Text>
-      {viewUrl && (
-        <Text variant="bodySm" color="subdued">
-          File URL: <code>{viewUrl}</code>
-        </Text>
-      )}
-      <Stack spacing="tight">
-        {onViewFile && fileId && (
-          <Button
-            size="slim"
-            primary
-            onClick={() => onViewFile(fileId, fileName, mimeType)}
+    <div className="app-file-card">
+      <Stack vertical spacing="loose">
+        <div className="app-flex-center" style={{ alignItems: "flex-start", gap: 16 }}>
+          {isImage && publicUrl ? (
+            <button
+              type="button"
+              onClick={() => openFileInNewTab(fileId, publicUrl)}
+              style={{
+                padding: 0,
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+              aria-label={`Open ${file.originalName}`}
+            >
+              <img
+                src={publicUrl}
+                alt={file.originalName}
+                className="app-file-thumb"
+              />
+            </button>
+          ) : (
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 8,
+                background: "var(--app-surface-low)",
+                border: "1px solid var(--app-outline-variant)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--app-primary)",
+              }}
+            >
+              {isPdf ? "PDF" : "DOC"}
+            </div>
+          )}
+          <Stack vertical spacing="extraTight">
+            <Text variant="bodyMd" fontWeight="semibold">
+              {file.originalName}
+            </Text>
+            <Stack spacing="tight">
+              {fieldLabel && <Badge size="small">{fieldLabel}</Badge>}
+              {file.sizeBytes != null && (
+                <Text variant="bodySm" color="subdued">
+                  {formatFileSize(file.sizeBytes)}
+                </Text>
+              )}
+              {isPdf && <Badge size="small">PDF</Badge>}
+            </Stack>
+          </Stack>
+        </div>
+
+        {isImage && publicUrl && (
+          <button
+            type="button"
+            onClick={() => openFileInNewTab(fileId, publicUrl)}
+            style={{
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+            }}
           >
-            View file
-          </Button>
+            <img
+              src={publicUrl}
+              alt={file.originalName}
+              className="app-file-preview"
+            />
+          </button>
         )}
-        {onDownloadFile && fileId && (
-          <Button size="slim" onClick={() => onDownloadFile(fileId)}>
+
+        <Stack spacing="tight">
+          <Button primary size="slim" onClick={() => openFileInNewTab(fileId, publicUrl)}>
+            Open in new tab
+          </Button>
+          <Button size="slim" onClick={() => downloadFile(fileId, publicUrl)}>
             Download
           </Button>
-        )}
+        </Stack>
       </Stack>
-    </Stack>
+    </div>
   );
 }
 
@@ -116,8 +172,6 @@ export default function SubmissionDetailModal({
   schema,
   formName,
   onClose,
-  onDownloadFile,
-  onViewFile,
 }) {
   if (!submission) return null;
 
@@ -137,104 +191,81 @@ export default function SubmissionDetailModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Submission details"
+      title={formName ? `Submission — ${formName}` : "Submission details"}
       primaryAction={{ content: "Close", onAction: onClose }}
-      large={files.length > 0}
+      large
     >
       <Modal.Section>
         <Stack vertical spacing="loose">
-          <Stack vertical spacing="extraTight">
-            {formName && (
-              <Text variant="bodyMd" fontWeight="semibold">
-                {formName}
-              </Text>
-            )}
-            <Text variant="bodySm" color="subdued">
-              {submittedAt}
-            </Text>
-            <Text variant="bodySm" color="subdued">
-              ID: <code>{submission.id}</code>
-            </Text>
-          </Stack>
-
-          <Divider />
+          <div className="app-modal-meta">
+            <div className="app-stack-tight">
+              <span className="app-subdued" style={{ fontSize: 12 }}>
+                Submitted
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>{submittedAt}</span>
+              <span className="app-subdued" style={{ fontSize: 12 }}>
+                ID: {submission.id}
+              </span>
+            </div>
+          </div>
 
           {files.length > 0 && (
             <Stack vertical spacing="loose">
               <Text variant="headingSm" as="h3">
-                Uploaded files
+                Attachments ({files.length})
               </Text>
               {files.map((file) => (
-                <Box
+                <FileAttachmentCard
                   key={file.id}
-                  padding="300"
-                  background="bg-surface-secondary"
-                  borderRadius="200"
-                >
-                  <Stack vertical spacing="tight">
-                    <Stack spacing="tight" alignment="center">
-                      <Text variant="bodySm" fontWeight="semibold">
-                        {getFieldLabel(schema, file.fieldId)}
-                      </Text>
-                      <Badge size="small">file</Badge>
-                    </Stack>
-                    <FileActions
-                      file={file}
-                      onViewFile={onViewFile}
-                      onDownloadFile={onDownloadFile}
-                    />
-                  </Stack>
-                </Box>
+                  file={file}
+                  fieldLabel={getFieldLabel(schema, file.fieldId)}
+                />
               ))}
             </Stack>
           )}
 
-          {entries.length === 0 && files.length === 0 ? (
-            <Text color="subdued">No field data in this submission.</Text>
-          ) : (
-            entries.length > 0 && (
-              <Stack vertical spacing="loose">
-                {files.length > 0 && (
+          {entries.length > 0 && (
+            <Stack vertical spacing="loose">
+              {files.length > 0 && (
+                <>
+                  <Divider />
                   <Text variant="headingSm" as="h3">
-                    Form fields
+                    Form responses
                   </Text>
-                )}
+                </>
+              )}
+              <div className="app-response-grid">
                 {entries.map(([fieldId, value, field]) => {
                   const label = field?.label || getFieldLabel(schema, fieldId);
                   const type = field?.type || getFieldType(schema, fieldId);
                   const isFile = type === "file" || value?.fileId;
 
+                  if (isFile && value?.fileId) {
+                    return (
+                      <div key={fieldId} style={{ gridColumn: "1 / -1" }}>
+                        <FileAttachmentCard file={value} fieldLabel={label} />
+                      </div>
+                    );
+                  }
+
                   return (
-                    <Box
-                      key={fieldId}
-                      padding="300"
-                      background="bg-surface-secondary"
-                      borderRadius="200"
-                    >
-                      <Stack vertical spacing="tight">
-                        <Stack spacing="tight" alignment="center">
-                          <Text variant="bodySm" fontWeight="semibold">
-                            {label}
-                          </Text>
-                          {type && <Badge size="small">{type}</Badge>}
-                        </Stack>
-                        {isFile && value?.fileId ? (
-                          <FileActions
-                            file={value}
-                            onViewFile={onViewFile}
-                            onDownloadFile={onDownloadFile}
-                          />
-                        ) : (
-                          <Text variant="bodyMd">
-                            {formatFieldValue(value, type)}
-                          </Text>
-                        )}
-                      </Stack>
-                    </Box>
+                    <div key={fieldId} className="app-response-field">
+                      <div className="app-flex-center" style={{ marginBottom: 4 }}>
+                        <span className="app-response-field-label">{label}</span>
+                        {type && <Badge size="small">{type}</Badge>}
+                      </div>
+                      <div className="app-response-field-value">
+                        {formatFieldValue(value, type)}
+                      </div>
+                    </div>
                   );
                 })}
-              </Stack>
-            )
+              </div>
+            </Stack>
+          )}
+
+          {entries.length === 0 && files.length === 0 && (
+            <Text color="subdued">No field data in this submission.</Text>
           )}
         </Stack>
       </Modal.Section>

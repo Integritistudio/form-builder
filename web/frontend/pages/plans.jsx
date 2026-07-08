@@ -1,19 +1,10 @@
 import { useState } from "react";
-import {
-  Page,
-  Layout,
-  Card,
-  Text,
-  Button,
-  Stack,
-  Badge,
-  Banner,
-  SkeletonBodyText,
-} from "@shopify/polaris";
+import { Page, Layout, Banner } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 
 import { apiFetch } from "../utils/api";
+import { AppShell, PageHero } from "../components/layout";
 
 const PLAN_DETAILS = [
   {
@@ -37,6 +28,7 @@ const PLAN_DETAILS = [
       "Image file uploads",
       "Custom CSS",
       "Gradient colors",
+      "Multi-step forms",
       "Header & title styling",
       "Email notifications with attachments",
     ],
@@ -80,99 +72,103 @@ export default function PlansPage() {
   const currentPlan = data?.plan || "free";
 
   return (
-    <Page title="Plans">
-      <TitleBar title="Plans" />
+    <AppShell>
+      <Page>
+        <TitleBar title="Plans" />
 
-      <Layout>
-        {message && (
-          <Layout.Section>
-            <Banner status={message.status} onDismiss={() => setMessage(null)}>
-              {message.text}
-            </Banner>
-          </Layout.Section>
-        )}
-
-        {IS_DEV && (
-          <Layout.Section>
-            <Banner status="info">
-              Development mode: use the buttons below to switch plans and test
-              Pro/Premium features. Paid billing is not available for custom
-              apps until the app is published.
-            </Banner>
-          </Layout.Section>
-        )}
-
-        {isLoading ? (
-          <Layout.Section>
-            <Card sectioned>
-              <SkeletonBodyText lines={4} />
-            </Card>
-          </Layout.Section>
-        ) : (
-          data && (
+        <Layout>
+          {message && (
             <Layout.Section>
-              <Card sectioned>
-                <Stack spacing="tight">
-                  <Text>
-                    Current plan: <Badge>{currentPlan}</Badge>
-                  </Text>
-                  <Text color="subdued">
-                    {data.usage.activeForms} active forms
-                    {data.plan === "free" &&
-                      ` of ${data.usage.formLimit} allowed`}
-                  </Text>
-                </Stack>
-              </Card>
+              <Banner status={message.status} onDismiss={() => setMessage(null)}>
+                {message.text}
+              </Banner>
             </Layout.Section>
-          )
-        )}
+          )}
 
-        <Layout.Section>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "16px",
-            }}
-          >
-            {PLAN_DETAILS.map((plan) => {
-              const isCurrent = currentPlan === plan.key;
-              return (
-                <Card key={plan.key} sectioned>
-                  <Stack vertical spacing="loose">
-                    <Stack vertical spacing="extraTight">
-                      <Text variant="headingMd" as="h2">
-                        {plan.name}
-                      </Text>
-                      <Text variant="headingLg" as="p">
-                        {plan.price}
-                      </Text>
-                    </Stack>
-                    <Stack vertical spacing="tight">
+          <Layout.Section>
+            <PageHero
+              title="Plans & billing"
+              subtitle="Choose the right plan for your store. Upgrade for file uploads, custom CSS, and advanced styling."
+            />
+          </Layout.Section>
+
+          {IS_DEV && (
+            <Layout.Section>
+              <Banner status="info">
+                Development mode: use the buttons below to switch plans and test
+                Pro/Premium features. Paid billing is not available for custom
+                apps until the app is published.
+              </Banner>
+            </Layout.Section>
+          )}
+
+          {isLoading ? (
+            <Layout.Section>
+              <div className="app-skeleton" style={{ height: 120 }} />
+            </Layout.Section>
+          ) : (
+            data && (
+              <Layout.Section>
+                <div className="app-panel app-section-gap">
+                  <div className="app-panel-body">
+                    <div className="app-flex-center" style={{ gap: 16 }}>
+                      <span className="app-subdued">Current plan</span>
+                      <span className={`app-status app-status--${currentPlan === "free" ? "draft" : "active"}`}>
+                        {currentPlan}
+                      </span>
+                      <span className="app-subdued">
+                        {data.usage.activeForms} active forms
+                        {data.plan === "free" &&
+                          ` of ${data.usage.formLimit} allowed`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Layout.Section>
+            )
+          )}
+
+          <Layout.Section>
+            <div className="app-plans-grid">
+              {PLAN_DETAILS.map((plan) => {
+                const isCurrent = currentPlan === plan.key;
+                return (
+                  <div
+                    key={plan.key}
+                    className={`app-plan-card${isCurrent ? " app-plan-card--current" : ""}`}
+                  >
+                    <div>
+                      <h3 className="app-plan-name">{plan.name}</h3>
+                      <p className="app-plan-price">{plan.price}</p>
+                    </div>
+                    <ul className="app-plan-features">
                       {plan.features.map((f) => (
-                        <Text key={f} variant="bodySm">
-                          {f}
-                        </Text>
+                        <li key={f}>{f}</li>
                       ))}
-                    </Stack>
+                    </ul>
                     {isCurrent ? (
-                      <Badge status="success">Current plan</Badge>
+                      <span className="app-status app-status--active">Current plan</span>
                     ) : IS_DEV ? (
-                      <Button
-                        primary={plan.key !== "free"}
-                        loading={devActivateMutation.isLoading}
+                      <button
+                        type="button"
+                        className={plan.key !== "free" ? "app-btn-primary" : "app-btn-outline"}
+                        disabled={devActivateMutation.isLoading}
                         onClick={() => devActivateMutation.mutate(plan.key)}
                       >
                         Switch to {plan.name}
-                      </Button>
-                    ) : null}
-                  </Stack>
-                </Card>
-              );
-            })}
-          </div>
-        </Layout.Section>
-      </Layout>
-    </Page>
+                      </button>
+                    ) : (
+                      <p className="app-subdued" style={{ fontSize: 12, margin: 0 }}>
+                        Contact support to upgrade.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    </AppShell>
   );
 }

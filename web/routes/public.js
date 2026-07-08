@@ -19,7 +19,7 @@ import {
   uploadBuffer,
   buildStorageKey,
 } from "../services/storage.js";
-import { buildSubmissionPayload } from "../lib/submissionFiles.js";
+import { buildSubmissionPayload, linkSubmissionFiles, linkFileToRecentSubmission } from "../lib/submissionFiles.js";
 
 const router = Router();
 const upload = multer({
@@ -182,11 +182,23 @@ router.post(
         status: "pending",
       });
 
+      const fileRecord = {
+        id: fileId,
+        formId: form.id,
+        shopDomain,
+        fieldId,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        storageKey,
+        createdAt: new Date(),
+      };
+      await linkFileToRecentSubmission(fileRecord);
+
       res.json({
         fileId,
         originalName: file.originalname,
         mimeType: file.mimetype,
-        viewUrl: `/api/submissions/files/${fileId}/view`,
       });
     } catch (err) {
       console.error("File upload error:", err);
@@ -298,18 +310,24 @@ router.post("/forms/:id/submit", submitRateLimiter, async (req, res) => {
       })
       .returning();
 
-    const fileIds = collectFileIds(form.schema, data);
+    const fileIds = await linkSubmissionFiles({
+      schema: form.schema,
+      rawData,
+      submissionId: submission.id,
+      shopDomain,
+      formId: form.id,
+    });
+
+    let finalPayload = data;
     if (fileIds.length > 0) {
+      finalPayload = await buildSubmissionPayload(form.schema, rawData, {
+        shopDomain,
+        formId: form.id,
+      });
       await db
-        .update(submissionFiles)
-        .set({ submissionId: submission.id, status: "linked" })
-        .where(
-          and(
-            inArray(submissionFiles.id, fileIds),
-            eq(submissionFiles.formId, form.id),
-            eq(submissionFiles.shopDomain, shopDomain)
-          )
-        );
+        .update(submissions)
+        .set({ payload: finalPayload })
+        .where(eq(submissions.id, submission.id));
     }
 
     res.json({
@@ -330,7 +348,7 @@ router.post("/forms/:id/submit", submitRateLimiter, async (req, res) => {
       formName: form.name,
       shopName: shopDomain.replace(".myshopify.com", ""),
       schema: form.schema,
-      payload: data,
+      payload: finalPayload,
       files,
     }).catch((err) => console.error("Email send failed:", err));
   } catch (err) {
@@ -338,15 +356,5 @@ router.post("/forms/:id/submit", submitRateLimiter, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-function collectFileIds(schema, data) {
-  const ids = [];
-  for (const field of schema?.fields || []) {
-    if (field.type !== "file") continue;
-    const val = data[field.id];
-    if (val?.fileId) ids.push(val.fileId);
-  }
-  return ids;
-}
 
 export default router;

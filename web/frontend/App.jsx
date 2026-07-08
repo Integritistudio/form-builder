@@ -3,6 +3,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import Routes from "./Routes";
 
 import { QueryProvider, PolarisProvider } from "./components";
+import "./styles/app.css";
 
 export default function App() {
   const pages = import.meta.glob("./pages/**/!(*.test.[jt]sx)*.([jt]sx)", {

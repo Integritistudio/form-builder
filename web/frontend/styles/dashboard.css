@@ -1,0 +1,2 @@
+/* @deprecated — use app.css (imported globally in App.jsx) */
+@import "./app.css";

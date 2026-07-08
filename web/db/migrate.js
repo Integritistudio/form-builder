@@ -1,4 +1,5 @@
 import { pool } from "./index.js";
+import { backfillSubmissionFileLinks } from "../lib/submissionFiles.js";
 
 const migrations = `
 CREATE TABLE IF NOT EXISTS shop_settings (
@@ -61,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_submission_files_form_id ON submission_files(form
 
 export async function runMigrations() {
   await pool.query(migrations);
+  // await backfillSubmissionFileLinks();
 }
 
 if (process.argv[1]?.endsWith("migrate.js")) {

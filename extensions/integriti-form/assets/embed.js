@@ -16,6 +16,127 @@
     return `integriti-field integriti-field--${field.id} integriti-field--${field.type} ${width}`;
   }
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function isMultiStepActive(schema) {
+    return Boolean(
+      schema?.multiStep?.enabled &&
+        Array.isArray(schema?.steps) &&
+        schema.steps.length > 1
+    );
+  }
+
+  function getStepFieldGroups(schema) {
+    const steps = schema?.steps || [];
+    if (!steps.length) return [{ step: null, fields: schema?.fields || [] }];
+    const defaultStepId = steps[0]?.id;
+    return steps.map((step) => ({
+      step,
+      fields: (schema?.fields || []).filter(
+        (field) => (field.stepId || defaultStepId) === step.id
+      ),
+    }));
+  }
+
+  function validateStepFieldsSync(schema, stepId, data) {
+    const errors = {};
+    const defaultStepId = schema?.steps?.[0]?.id;
+    const fields = (schema?.fields || []).filter(
+      (field) => (field.stepId || defaultStepId) === stepId
+    );
+
+    for (const field of fields) {
+      if (field.type === "heading" || field.type === "paragraph") continue;
+      const value = data[field.id];
+      const isEmpty =
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        (Array.isArray(value) && value.length === 0) ||
+        (field.type === "file" && (!value || !value.fileId));
+
+      if (field.required && isEmpty) {
+        errors[field.id] = `${field.label} is required`;
+        continue;
+      }
+      if (isEmpty) continue;
+      if (field.type === "email" && !EMAIL_REGEX.test(String(value))) {
+        errors[field.id] = "Enter a valid email address";
+      }
+      if (field.type === "number" && Number.isNaN(Number(value))) {
+        errors[field.id] = "Enter a valid number";
+      }
+    }
+    return errors;
+  }
+
+  function renderStepProgress(schema, currentStep, totalSteps, styles) {
+    const config = schema.multiStep || {};
+    if (!config.showProgress) return null;
+
+    const style = config.progressStyle || "bar";
+    const pct = Math.round(((currentStep + 1) / totalSteps) * 100);
+
+    if (style === "dots") {
+      const wrap = el("div", { className: "integriti-step-dots" });
+      for (let i = 0; i < totalSteps; i += 1) {
+        let cls = "integriti-step-dot";
+        if (i === currentStep) cls += " integriti-step-dot--active";
+        else if (i < currentStep) cls += " integriti-step-dot--done";
+        wrap.appendChild(el("span", { className: cls }));
+      }
+      return wrap;
+    }
+
+    if (style === "pills") {
+      const wrap = el("div", { className: "integriti-step-pills" });
+      (schema.steps || []).forEach((step, i) => {
+        let cls = "integriti-step-pill";
+        if (i === currentStep) cls += " integriti-step-pill--active";
+        else if (i < currentStep) cls += " integriti-step-pill--done";
+        const pill = el("div", { className: cls });
+        pill.appendChild(el("span", { className: "integriti-step-pill-num", text: String(i + 1) }));
+        pill.appendChild(el("span", { className: "integriti-step-pill-text", text: step.title }));
+        wrap.appendChild(pill);
+      });
+      return wrap;
+    }
+
+    if (style === "numbered") {
+      const wrap = el("div", { className: "integriti-step-numbered" });
+      (schema.steps || []).forEach((step, i) => {
+        const itemWrap = el("div", { className: "integriti-step-numbered-item" });
+        if (i > 0) {
+          itemWrap.appendChild(el("span", {
+            className: `integriti-step-connector${i <= currentStep ? " integriti-step-connector--done" : ""}`,
+          }));
+        }
+        let cls = "integriti-step-number";
+        if (i === currentStep) cls += " integriti-step-number--active";
+        else if (i < currentStep) cls += " integriti-step-number--done";
+        const item = el("div", { className: cls });
+        item.appendChild(el("span", { className: "integriti-step-number-badge", text: String(i + 1) }));
+        item.appendChild(el("span", { className: "integriti-step-number-label", text: step.title }));
+        itemWrap.appendChild(item);
+        wrap.appendChild(itemWrap);
+      });
+      return wrap;
+    }
+
+    const wrap = el("div", { className: "integriti-step-progress" });
+    const stepTitle = schema.steps?.[currentStep]?.title;
+    const label = el("div", { className: "integriti-step-progress-label" });
+    label.appendChild(el("span", {
+      text: `Step ${currentStep + 1} of ${totalSteps}${stepTitle ? ` — ${stepTitle}` : ""}`,
+    }));
+    label.appendChild(el("span", { text: `${pct}%` }));
+    wrap.appendChild(label);
+    const track = el("div", { className: "integriti-step-progress-track" });
+    track.appendChild(el("div", { className: "integriti-step-progress-fill", style: `width:${pct}%` }));
+    wrap.appendChild(track);
+    return wrap;
+  }
+
   function getApiOrigin(block) {
     const shop = block.getAttribute("data-shop");
     if (shop) return `https://${shop}`;
@@ -85,6 +206,41 @@ ${scope} .integriti-form-success{padding:16px;border:1px solid ${inputBorder};}
 ${scope} .integriti-submit{margin-top:8px;padding:12px 24px;font-size:${s.inputSize||"16"}px;font-weight:500;background:${btnBg};color:${s.buttonTextColor||"#fff"};border:none;border-radius:${s.borderRadius||"4"}px;cursor:pointer;width:100%;}
 ${scope} .integriti-submit:disabled{opacity:.5;cursor:not-allowed;}
 ${scope} .integriti-hp{position:absolute;left:-9999px;opacity:0;height:0;width:0;}
+${scope} .integriti-step-progress{margin-bottom:24px;}
+${scope} .integriti-step-progress-label{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:${s.labelColor||"#444"};margin-bottom:8px;font-weight:500;}
+${scope} .integriti-step-progress-track{height:6px;background:${inputBorder};border-radius:999px;overflow:hidden;}
+${scope} .integriti-step-progress-fill{height:100%;background:${btnBg};border-radius:999px;transition:width .35s ease;}
+${scope} .integriti-step-dots{display:flex;gap:8px;justify-content:center;margin-bottom:24px;}
+${scope} .integriti-step-dot{width:10px;height:10px;border-radius:50%;background:${inputBorder};}
+${scope} .integriti-step-dot--active{background:${focusBorder};transform:scale(1.15);}
+${scope} .integriti-step-dot--done{background:${btnBg};}
+${scope} .integriti-step-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;}
+${scope} .integriti-step-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid ${inputBorder};background:#fff;font-size:13px;color:${s.labelColor||"#444"};}
+${scope} .integriti-step-pill--active{border-color:${focusBorder};background:${btnBg};color:${s.buttonTextColor||"#fff"};}
+${scope} .integriti-step-pill--done{border-color:${focusBorder};background:rgba(0,0,0,0.04);}
+${scope} .integriti-step-pill-num{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:rgba(0,0,0,0.06);}
+${scope} .integriti-step-pill--active .integriti-step-pill-num{background:rgba(255,255,255,0.25);}
+${scope} .integriti-step-numbered{display:flex;align-items:center;flex-wrap:wrap;margin-bottom:24px;}
+${scope} .integriti-step-numbered-item{display:flex;align-items:center;flex:1 1 auto;}
+${scope} .integriti-step-connector{flex:1;height:2px;min-width:12px;margin:0 4px;background:${inputBorder};}
+${scope} .integriti-step-connector--done{background:${btnBg};}
+${scope} .integriti-step-number-label{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+${scope} .integriti-step-empty{width:100%;padding:32px 20px;text-align:center;font-size:14px;color:${s.labelColor||"#444"};background:rgba(0,0,0,0.03);border:1px dashed ${inputBorder};border-radius:${s.borderRadius||"4"}px;}
+${scope} .integriti-step-number{display:flex;align-items:center;gap:8px;font-size:13px;color:${s.labelColor||"#444"};opacity:.55;}
+${scope} .integriti-step-number--active{opacity:1;font-weight:600;color:${s.textColor||"#1a1a1a"};}
+${scope} .integriti-step-number-badge{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid ${inputBorder};background:#fff;}
+${scope} .integriti-step-number--active .integriti-step-number-badge,${scope} .integriti-step-number--done .integriti-step-number-badge{border-color:${focusBorder};background:${btnBg};color:${s.buttonTextColor||"#fff"};}
+${scope} .integriti-step-header{margin-bottom:20px;}
+${scope} .integriti-step-title{margin:0 0 6px;font-size:20px;font-weight:600;color:${titleColor};line-height:1.3;}
+${scope} .integriti-step-description{margin:0;font-size:${descSize}px;color:${descColor};line-height:1.5;opacity:${descOpacity};}
+${scope} .integriti-step-fields{animation:integriti-step-in .3s ease;}
+@keyframes integriti-step-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+${scope} .integriti-step-nav{display:flex;gap:12px;margin-top:20px;align-items:center;}
+${scope} .integriti-step-nav--split{justify-content:space-between;}
+${scope} .integriti-btn-back{padding:12px 20px;font-size:${s.inputSize||"16"}px;font-weight:500;background:transparent;color:${s.textColor||"#1a1a1a"};border:1px solid ${inputBorder};border-radius:${s.borderRadius||"4"}px;cursor:pointer;font-family:inherit;}
+${scope} .integriti-btn-next{flex:1;padding:12px 24px;font-size:${s.inputSize||"16"}px;font-weight:500;background:${btnBg};color:${s.buttonTextColor||"#fff"};border:none;border-radius:${s.borderRadius||"4"}px;cursor:pointer;font-family:inherit;}
+${scope} .integriti-step-nav--split .integriti-btn-next{flex:0 1 auto;min-width:140px;}
+${scope} .integriti-btn-next:disabled{opacity:.5;cursor:not-allowed;}
 ${customCss||""}`;
   }
 
@@ -126,11 +282,10 @@ ${customCss||""}`;
       fileId: data.fileId,
       originalName: data.originalName || file.name,
       mimeType: data.mimeType || file.type,
-      viewUrl: data.viewUrl,
     };
   }
 
-  function renderField(field, values, errors, onChange, apiOrigin, formId) {
+  function renderField(field, values, errors, onChange, apiOrigin, formId, uploadState) {
     const wrap = el("div", { className: fieldClassName(field) });
 
     if (field.type === "heading") {
@@ -208,6 +363,7 @@ ${customCss||""}`;
         }
         nameEl.textContent = "Uploading...";
         input.disabled = true;
+        uploadState.active += 1;
         try {
           const result = await uploadFile(apiOrigin, formId, field.id, file);
           onChange(field.id, result);
@@ -216,6 +372,7 @@ ${customCss||""}`;
           nameEl.textContent = err.message || "Upload failed";
           onChange(field.id, null);
         } finally {
+          uploadState.active -= 1;
           input.disabled = false;
         }
       });
@@ -238,15 +395,209 @@ ${customCss||""}`;
     const scopeClass = `integriti-form integriti-form-${id}`;
     const values = {};
     const errors = {};
+    const uploadState = { active: 0 };
+    const multiStep = isMultiStepActive(schema);
+    const stepGroups = multiStep ? getStepFieldGroups(schema) : [];
+    const state = { currentStep: 0, root: null, formEl: null };
 
     function onChange(fieldId, value) {
       values[fieldId] = value;
       delete errors[fieldId];
     }
 
+    function getVisibleFields() {
+      if (!multiStep) return schema.fields || [];
+      return stepGroups[state.currentStep]?.fields || [];
+    }
+
+    function validateCurrentStep() {
+      if (!multiStep) return true;
+      const stepId = stepGroups[state.currentStep]?.step?.id;
+      const stepErrors = validateStepFieldsSync(schema, stepId, values);
+      Object.keys(stepErrors).forEach((k) => { errors[k] = stepErrors[k]; });
+      getVisibleFields().forEach((f) => {
+        if (!stepErrors[f.id]) delete errors[f.id];
+      });
+      return Object.keys(stepErrors).length === 0;
+    }
+
+    function showFormError(message) {
+      const existing = state.root.querySelector(".integriti-form-error");
+      if (existing) existing.remove();
+      state.root.insertBefore(
+        el("div", { className: "integriti-form-error", text: message }),
+        state.formEl
+      );
+    }
+
+    function refreshFields() {
+      const fieldsWrap = state.formEl.querySelector(".integriti-form-fields");
+      fieldsWrap.innerHTML = "";
+      fieldsWrap.className = `integriti-form-fields${
+        multiStep && schema.multiStep?.animateTransitions !== false
+          ? " integriti-step-fields"
+          : ""
+      }`;
+      const visible = getVisibleFields();
+      if (!visible.length) {
+        fieldsWrap.appendChild(el("div", {
+          className: "integriti-step-empty",
+          text: "This step has no fields yet.",
+        }));
+        return;
+      }
+      visible.forEach((field) =>
+        fieldsWrap.appendChild(
+          renderField(field, values, errors, onChange, apiOrigin, id, uploadState)
+        )
+      );
+    }
+
+    function refreshStepChrome() {
+      const stepConfig = schema.multiStep || {};
+      const totalSteps = stepGroups.length;
+      const isLast = state.currentStep >= totalSteps - 1;
+      const activeStep = stepGroups[state.currentStep]?.step;
+
+      state.root
+        .querySelectorAll(
+          ".integriti-step-progress, .integriti-step-dots, .integriti-step-numbered"
+        )
+        .forEach((node) => node.remove());
+      const progress = renderStepProgress(schema, state.currentStep, totalSteps, styles);
+      if (progress) state.root.insertBefore(progress, state.formEl);
+
+      let stepHeader = state.root.querySelector(".integriti-step-header");
+      if (stepHeader) stepHeader.remove();
+      if (
+        stepConfig.showStepTitles !== false &&
+        activeStep &&
+        (activeStep.title || activeStep.description)
+      ) {
+        stepHeader = el("div", { className: "integriti-step-header" });
+        if (activeStep.title) {
+          stepHeader.appendChild(el("h3", { className: "integriti-step-title", text: activeStep.title }));
+        }
+        if (activeStep.description) {
+          stepHeader.appendChild(el("p", { className: "integriti-step-description", text: activeStep.description }));
+        }
+        state.root.insertBefore(stepHeader, state.formEl);
+      }
+
+      const nav = state.formEl.querySelector(".integriti-step-nav");
+      if (nav) nav.remove();
+
+      if (multiStep) {
+        const navEl = el("div", {
+          className: `integriti-step-nav${
+            stepConfig.allowBack !== false && state.currentStep > 0
+              ? " integriti-step-nav--split"
+              : ""
+          }`,
+        });
+
+        if (stepConfig.allowBack !== false && state.currentStep > 0) {
+          const backBtn = el("button", {
+            type: "button",
+            className: "integriti-btn-back",
+            text: stepConfig.backLabel || "Back",
+          });
+          backBtn.addEventListener("click", () => {
+            state.currentStep -= 1;
+            const err = state.root.querySelector(".integriti-form-error");
+            if (err) err.remove();
+            refreshStepChrome();
+            refreshFields();
+          });
+          navEl.appendChild(backBtn);
+        }
+
+        const nextLabel = isLast
+          ? schema.submitLabel || "Submit"
+          : activeStep?.nextLabel || "Continue";
+
+        if (isLast) {
+          const submitBtn = el("button", {
+            type: "submit",
+            className: "integriti-btn-next",
+            text: nextLabel,
+          });
+          navEl.appendChild(submitBtn);
+        } else {
+          const nextBtn = el("button", {
+            type: "button",
+            className: "integriti-btn-next",
+            text: nextLabel,
+          });
+          nextBtn.addEventListener("click", () => {
+            if (!validateCurrentStep()) {
+              refreshFields();
+              return;
+            }
+            const err = state.root.querySelector(".integriti-form-error");
+            if (err) err.remove();
+            state.currentStep += 1;
+            refreshStepChrome();
+            refreshFields();
+          });
+          navEl.appendChild(nextBtn);
+        }
+
+        state.formEl.appendChild(navEl);
+      }
+    }
+
+    async function submitForm(submitBtn) {
+      if (uploadState.active > 0) {
+        showFormError("Please wait for file uploads to finish before submitting.");
+        return;
+      }
+
+      for (const field of schema.fields || []) {
+        if (field.type !== "file") continue;
+        if (values[field.id] && !values[field.id].fileId) {
+          showFormError("Please wait for the file upload to complete.");
+          return;
+        }
+      }
+
+      if (multiStep && !validateCurrentStep()) {
+        refreshFields();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Sending...";
+
+      try {
+        const res = await fetch(proxyUrl(apiOrigin, `/forms/${id}/submit`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: values }),
+        });
+        const data = await parseJsonResponse(res);
+        if (!res.ok) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = schema.submitLabel || "Submit";
+          if (data.errors) {
+            Object.keys(data.errors).forEach((k) => { errors[k] = data.errors[k]; });
+            refreshFields();
+          } else {
+            showFormError(data.error || "Submission failed.");
+          }
+          return;
+        }
+        draw(data.message || schema.successMessage);
+      } catch {
+        submitBtn.disabled = false;
+        submitBtn.textContent = schema.submitLabel || "Submit";
+      }
+    }
+
     function draw(successMessage) {
       container.innerHTML = "";
       const root = el("div", { className: scopeClass });
+      state.root = root;
       const style = el("style");
       style.textContent = buildStyles(styles, customCss, id);
       root.appendChild(style);
@@ -265,46 +616,48 @@ ${customCss||""}`;
       }
 
       const formEl = el("form");
+      state.formEl = formEl;
       formEl.appendChild(el("input", { type: "text", name: "_hp_field", className: "integriti-hp", tabindex: "-1", autocomplete: "off" }));
 
       const fieldsWrap = el("div", { className: "integriti-form-fields" });
-      (schema.fields || []).forEach((field) =>
-        fieldsWrap.appendChild(renderField(field, values, errors, onChange, apiOrigin, id))
-      );
       formEl.appendChild(fieldsWrap);
 
-      const submit = el("button", { type: "submit", className: "integriti-submit", text: schema.submitLabel || "Submit" });
-      formEl.appendChild(submit);
+      if (!multiStep) {
+        getVisibleFields().forEach((field) =>
+          fieldsWrap.appendChild(
+            renderField(field, values, errors, onChange, apiOrigin, id, uploadState)
+          )
+        );
+        const submit = el("button", { type: "submit", className: "integriti-submit", text: schema.submitLabel || "Submit" });
+        formEl.appendChild(submit);
+      } else {
+        refreshStepChrome();
+        refreshFields();
+      }
 
       formEl.addEventListener("submit", async (e) => {
         e.preventDefault();
-        submit.disabled = true;
-        submit.textContent = "Sending...";
-
-        try {
-          const res = await fetch(proxyUrl(apiOrigin, `/forms/${id}/submit`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ data: values }),
-          });
-          const data = await parseJsonResponse(res);
-          if (!res.ok) {
-            submit.disabled = false;
-            submit.textContent = schema.submitLabel || "Submit";
-            if (data.errors) {
-              Object.keys(data.errors).forEach((k) => { errors[k] = data.errors[k]; });
-              draw();
-            } else {
-              const errEl = el("div", { className: "integriti-form-error", text: data.error || "Submission failed." });
-              if (!root.querySelector(".integriti-form-error")) root.insertBefore(errEl, formEl);
-            }
+        const submitBtn = formEl.querySelector(
+          multiStep ? ".integriti-btn-next[type='submit']" : ".integriti-submit"
+        );
+        if (!multiStep) {
+          await submitForm(submitBtn);
+          return;
+        }
+        const isLast = state.currentStep >= stepGroups.length - 1;
+        if (!isLast) {
+          if (!validateCurrentStep()) {
+            refreshFields();
             return;
           }
-          draw(data.message || schema.successMessage);
-        } catch {
-          submit.disabled = false;
-          submit.textContent = schema.submitLabel || "Submit";
+          state.currentStep += 1;
+          const err = root.querySelector(".integriti-form-error");
+          if (err) err.remove();
+          refreshStepChrome();
+          refreshFields();
+          return;
         }
+        await submitForm(submitBtn);
       });
 
       root.appendChild(formEl);

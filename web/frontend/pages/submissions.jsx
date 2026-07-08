@@ -1,27 +1,13 @@
 import { useState } from "react";
-import {
-  Page,
-  Layout,
-  Card,
-  IndexTable,
-  Text,
-  Button,
-  Stack,
-  EmptyState,
-  Select,
-  SkeletonBodyText,
-  Box,
-  Badge,
-} from "@shopify/polaris";
+import { Page, Layout, Banner } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useQuery } from "react-query";
 import { useNavigate } from "react-router-dom";
 
 import { apiFetch } from "../utils/api";
-import SubmissionDetailModal, {
-  submissionPreview,
-} from "../components/SubmissionDetailModal";
-import FilePreviewModal from "../components/FilePreviewModal";
+import { AppShell, PageHero, AppPagination } from "../components/layout";
+import SubmissionsTable from "../components/submissions/SubmissionsTable";
+import SubmissionDetailModal from "../components/SubmissionDetailModal";
 
 export default function AllSubmissionsPage() {
   const navigate = useNavigate();
@@ -29,7 +15,6 @@ export default function AllSubmissionsPage() {
   const [formFilter, setFormFilter] = useState("");
   const [daysFilter, setDaysFilter] = useState("0");
   const [selected, setSelected] = useState(null);
-  const [previewFile, setPreviewFile] = useState(null);
 
   const queryKey = ["all-submissions", page, formFilter, daysFilter];
   const { data, isLoading } = useQuery(queryKey, () => {
@@ -42,172 +27,99 @@ export default function AllSubmissionsPage() {
   const submissions = data?.submissions || [];
   const forms = data?.forms || [];
   const total = data?.pagination?.total || 0;
-
-  async function downloadFile(fileId) {
-    const result = await apiFetch(`/api/submissions/files/${fileId}/download`);
-    window.open(result.url, "_blank");
-  }
-
-  const rowMarkup = submissions.map((sub, index) => (
-    <IndexTable.Row id={sub.id} key={sub.id} position={index}>
-      <IndexTable.Cell>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodyMd">
-            {new Date(sub.createdAt).toLocaleDateString()}
-          </Text>
-          <Text variant="bodySm" color="subdued">
-            {new Date(sub.createdAt).toLocaleTimeString()}
-          </Text>
-        </Stack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Button plain onClick={() => navigate(`/forms/${sub.formId}`)}>
-          {sub.formName}
-        </Button>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Stack vertical spacing="extraTight">
-          <Text variant="bodySm">
-            {submissionPreview(sub.formSchema, sub.payload, sub.files)}
-          </Text>
-          {sub.files?.length > 0 && (
-            <Badge size="small">📎 {sub.files.length} file{sub.files.length === 1 ? "" : "s"}</Badge>
-          )}
-        </Stack>
-      </IndexTable.Cell>
-      <IndexTable.Cell>
-        <Button onClick={() => setSelected(sub)}>View</Button>
-      </IndexTable.Cell>
-    </IndexTable.Row>
-  ));
+  const totalPages = Math.ceil(total / 20) || 1;
 
   return (
-    <Page
-      title="Submissions"
-      subtitle={total ? `${total} total` : undefined}
-    >
-      <TitleBar title="Submissions" />
+    <AppShell>
+      <Page fullWidth>
+        <TitleBar title="Submissions" />
 
-      <Layout>
-        <Layout.Section>
-          <Card sectioned>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "16px",
-              }}
-            >
-              <Select
-                label="Form"
-                options={[
-                  { label: "All forms", value: "" },
-                  ...forms.map((f) => ({ label: f.name, value: f.id })),
-                ]}
-                value={formFilter}
-                onChange={(v) => {
-                  setFormFilter(v);
-                  setPage(1);
-                }}
-              />
-              <Select
-                label="Date range"
-                options={[
-                  { label: "All time", value: "0" },
-                  { label: "Last 7 days", value: "7" },
-                  { label: "Last 30 days", value: "30" },
-                ]}
-                value={daysFilter}
-                onChange={(v) => {
-                  setDaysFilter(v);
-                  setPage(1);
-                }}
-              />
+        <Layout>
+          <Layout.Section>
+            <PageHero
+              title="Submissions"
+              subtitle="View and manage responses from all your storefront forms."
+              meta={
+                total > 0 ? (
+                  <span className="app-badge-inline">
+                    {total} total
+                  </span>
+                ) : null
+              }
+            />
+          </Layout.Section>
+
+          <Layout.Section>
+            <div className="app-panel app-section-gap">
+              <div className="app-panel-body">
+                <div className="app-filters">
+                  <div>
+                    <label className="app-select-label" htmlFor="form-filter">
+                      Form
+                    </label>
+                    <select
+                      id="form-filter"
+                      className="app-select"
+                      value={formFilter}
+                      onChange={(e) => {
+                        setFormFilter(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="">All forms</option>
+                      {forms.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="app-select-label" htmlFor="days-filter">
+                      Date range
+                    </label>
+                    <select
+                      id="days-filter"
+                      className="app-select"
+                      value={daysFilter}
+                      onChange={(e) => {
+                        setDaysFilter(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="0">All time</option>
+                      <option value="7">Last 7 days</option>
+                      <option value="30">Last 30 days</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
-          </Card>
-        </Layout.Section>
 
-        <Layout.Section>
-          <Card>
-            {isLoading ? (
-              <Box padding="400">
-                <SkeletonBodyText lines={8} />
-              </Box>
-            ) : submissions.length === 0 ? (
-              <EmptyState heading="No submissions yet">
-                <p>Submissions from your storefront forms will appear here.</p>
-              </EmptyState>
-            ) : (
-              <>
-                <Box padding="300" paddingBlockEnd="0">
-                  <Stack spacing="tight">
-                    <Badge>
-                      {total} submission{total === 1 ? "" : "s"}
-                    </Badge>
-                  </Stack>
-                </Box>
-                <IndexTable
-                  resourceName={{
-                    singular: "submission",
-                    plural: "submissions",
-                  }}
-                  itemCount={submissions.length}
-                  headings={[
-                    { title: "Date" },
-                    { title: "Form" },
-                    { title: "Preview" },
-                    { title: "" },
-                  ]}
-                >
-                  {rowMarkup}
-                </IndexTable>
-              </>
-            )}
-          </Card>
+            <SubmissionsTable
+              submissions={submissions}
+              loading={isLoading}
+              showForm
+              onView={setSelected}
+              onFormClick={(formId) => navigate(`/forms/${formId}`)}
+            />
 
-          {total > 20 && (
-            <Box paddingBlockStart="400">
-              <Stack distribution="center" spacing="tight">
-                <Button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <Text>
-                  Page {page} of {Math.ceil(total / 20)}
-                </Text>
-                <Button
-                  disabled={page >= Math.ceil(total / 20)}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </Stack>
-            </Box>
-          )}
-        </Layout.Section>
-      </Layout>
+            <AppPagination
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+            />
+          </Layout.Section>
+        </Layout>
 
-      <SubmissionDetailModal
-        open={Boolean(selected)}
-        submission={selected}
-        schema={selected?.formSchema}
-        formName={selected?.formName}
-        onClose={() => setSelected(null)}
-        onDownloadFile={downloadFile}
-        onViewFile={(fileId, fileName, mimeType) =>
-          setPreviewFile({ fileId, fileName, mimeType })
-        }
-      />
-
-      <FilePreviewModal
-        open={Boolean(previewFile)}
-        fileId={previewFile?.fileId}
-        fileName={previewFile?.fileName}
-        mimeType={previewFile?.mimeType}
-        onClose={() => setPreviewFile(null)}
-      />
-    </Page>
+        <SubmissionDetailModal
+          open={Boolean(selected)}
+          submission={selected}
+          schema={selected?.formSchema}
+          formName={selected?.formName}
+          onClose={() => setSelected(null)}
+        />
+      </Page>
+    </AppShell>
   );
 }

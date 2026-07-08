@@ -9,6 +9,7 @@ export const PLAN_FEATURES = {
   gradients: ["pro", "premium"],
   fileUpload: ["pro", "premium"],
   fileUploadPremium: ["premium"],
+  multiStep: ["pro", "premium"],
 };
 
 export function hasFeature(plan, feature) {
@@ -21,6 +22,7 @@ export function getPlanFeatures(plan) {
     gradients: hasFeature(plan, "gradients"),
     fileUpload: hasFeature(plan, "fileUpload"),
     fileUploadPremium: hasFeature(plan, "fileUploadPremium"),
+    multiStep: hasFeature(plan, "multiStep"),
   };
 }
 

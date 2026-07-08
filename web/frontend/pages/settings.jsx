@@ -2,21 +2,19 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Page,
   Layout,
-  Card,
   FormLayout,
   TextField,
   Checkbox,
   Button,
   Banner,
-  Stack,
   Select,
   Text,
-  Box,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 
 import { apiFetch } from "../utils/api";
+import { AppShell, PageHero } from "../components/layout";
 
 const SMTP_PRESETS = [
   {
@@ -175,148 +173,167 @@ export default function SettingsPage() {
   );
 
   if (isLoading || !form) {
-    return <Page title="Email settings" />;
+    return (
+      <AppShell>
+        <Page>
+          <div className="app-skeleton" style={{ height: 400, margin: 24 }} />
+        </Page>
+      </AppShell>
+    );
   }
 
   return (
-    <Page title="Email settings">
-      <TitleBar title="Email settings" />
+    <AppShell>
+      <Page>
+        <TitleBar title="Email settings" />
 
-      <Layout>
-        {message && (
+        <Layout>
+          {message && (
+            <Layout.Section>
+              <Banner
+                status={message.status}
+                onDismiss={() => setMessage(null)}
+              >
+                {message.text}
+              </Banner>
+            </Layout.Section>
+          )}
+
           <Layout.Section>
-            <Banner
-              status={message.status}
-              onDismiss={() => setMessage(null)}
-            >
-              {message.text}
+            <PageHero
+              title="Email settings"
+              subtitle="Configure SMTP so submission notifications reach your inbox."
+            />
+          </Layout.Section>
+
+          <Layout.Section>
+            <Banner status="info">
+              If test emails fail with a timeout or DNS error, try disabling your VPN
+              or firewall — many networks block outbound SMTP on ports 587 and 465.
+              Submissions are still saved even when email delivery fails.
             </Banner>
           </Layout.Section>
-        )}
 
-        <Layout.Section>
-          <Banner status="info">
-            If test emails fail with a timeout or DNS error, try disabling your VPN
-            or firewall — many networks block outbound SMTP on ports 587 and 465.
-            Submissions are still saved even when email delivery fails.
-          </Banner>
-        </Layout.Section>
+          <Layout.Section>
+            <div className="app-panel app-section-gap">
+              <div className="app-panel-header">
+                <h2 className="app-panel-title">SMTP server</h2>
+              </div>
+              <div className="app-panel-body">
+                <FormLayout>
+                  <Select
+                    label="Email provider"
+                    options={SMTP_PRESETS.map((p) => ({
+                      label: p.label,
+                      value: p.id,
+                    }))}
+                    value={presetId}
+                    onChange={applyPreset}
+                    helpText="Choose a provider to prefill host, port, and TLS settings."
+                  />
+                  {activePreset.hint && (
+                    <Text variant="bodySm" color="subdued">
+                      {activePreset.hint}
+                    </Text>
+                  )}
+                  <TextField
+                    label="SMTP host"
+                    value={form.smtpHost}
+                    onChange={(v) => {
+                      setPresetId("custom");
+                      setForm({ ...form, smtpHost: v });
+                    }}
+                    placeholder="smtp.example.com"
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="SMTP port"
+                    type="number"
+                    value={String(form.smtpPort)}
+                    onChange={(v) => {
+                      setPresetId("custom");
+                      setForm({ ...form, smtpPort: v });
+                    }}
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="SMTP username"
+                    value={form.smtpUser}
+                    onChange={(v) => setForm({ ...form, smtpUser: v })}
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="SMTP password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.smtpPassword}
+                    onChange={(v) => setForm({ ...form, smtpPassword: v })}
+                    helpText={
+                      form.hasPassword
+                        ? "Leave blank to keep existing password."
+                        : undefined
+                    }
+                    autoComplete="off"
+                    connectedRight={
+                      <Button onClick={() => setShowPassword((v) => !v)}>
+                        {showPassword ? "Hide" : "Show"}
+                      </Button>
+                    }
+                  />
+                  <Checkbox
+                    label="Use TLS/SSL"
+                    checked={form.smtpSecure}
+                    onChange={(v) => {
+                      setPresetId("custom");
+                      setForm({ ...form, smtpSecure: v });
+                    }}
+                  />
+                </FormLayout>
+              </div>
+            </div>
 
-        <Layout.Section>
-          <Card title="SMTP server" sectioned>
-            <FormLayout>
-              <Select
-                label="Email provider"
-                options={SMTP_PRESETS.map((p) => ({
-                  label: p.label,
-                  value: p.id,
-                }))}
-                value={presetId}
-                onChange={applyPreset}
-                helpText="Choose a provider to prefill host, port, and TLS settings."
-              />
-              {activePreset.hint && (
-                <Box paddingBlockEnd="200">
-                  <Text variant="bodySm" color="subdued">
-                    {activePreset.hint}
-                  </Text>
-                </Box>
-              )}
-              <TextField
-                label="SMTP host"
-                value={form.smtpHost}
-                onChange={(v) => {
-                  setPresetId("custom");
-                  setForm({ ...form, smtpHost: v });
-                }}
-                placeholder="smtp.example.com"
-                autoComplete="off"
-              />
-              <TextField
-                label="SMTP port"
-                type="number"
-                value={String(form.smtpPort)}
-                onChange={(v) => {
-                  setPresetId("custom");
-                  setForm({ ...form, smtpPort: v });
-                }}
-                autoComplete="off"
-              />
-              <TextField
-                label="SMTP username"
-                value={form.smtpUser}
-                onChange={(v) => setForm({ ...form, smtpUser: v })}
-                autoComplete="off"
-              />
-              <TextField
-                label="SMTP password"
-                type={showPassword ? "text" : "password"}
-                value={form.smtpPassword}
-                onChange={(v) => setForm({ ...form, smtpPassword: v })}
-                helpText={
-                  form.hasPassword
-                    ? "Leave blank to keep existing password."
-                    : undefined
-                }
-                autoComplete="off"
-                connectedRight={
-                  <Button onClick={() => setShowPassword((v) => !v)}>
-                    {showPassword ? "Hide" : "Show"}
-                  </Button>
-                }
-              />
-              <Checkbox
-                label="Use TLS/SSL"
-                checked={form.smtpSecure}
-                onChange={(v) => {
-                  setPresetId("custom");
-                  setForm({ ...form, smtpSecure: v });
-                }}
-              />
-            </FormLayout>
-          </Card>
-        </Layout.Section>
+            <div className="app-panel app-section-gap">
+              <div className="app-panel-header">
+                <h2 className="app-panel-title">Recipients</h2>
+              </div>
+              <div className="app-panel-body">
+                <FormLayout>
+                  <TextField
+                    label="Send submissions to"
+                    type="email"
+                    value={form.emailTo}
+                    onChange={(v) => setForm({ ...form, emailTo: v })}
+                    helpText="Required to receive submission emails"
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="CC (optional)"
+                    type="email"
+                    value={form.emailCc}
+                    onChange={(v) => setForm({ ...form, emailCc: v })}
+                    autoComplete="off"
+                  />
+                </FormLayout>
+              </div>
+            </div>
 
-        <Layout.Section>
-          <Card title="Recipients" sectioned>
-            <FormLayout>
-              <TextField
-                label="Send submissions to"
-                type="email"
-                value={form.emailTo}
-                onChange={(v) => setForm({ ...form, emailTo: v })}
-                helpText="Required to receive submission emails"
-                autoComplete="off"
-              />
-              <TextField
-                label="CC (optional)"
-                type="email"
-                value={form.emailCc}
-                onChange={(v) => setForm({ ...form, emailCc: v })}
-                autoComplete="off"
-              />
-            </FormLayout>
-          </Card>
-        </Layout.Section>
-
-        <Layout.Section>
-          <Stack spacing="tight">
-            <Button
-              primary
-              loading={saveMutation.isLoading}
-              onClick={() => saveMutation.mutate(form)}
-            >
-              Save settings
-            </Button>
-            <Button
-              loading={testMutation.isLoading}
-              onClick={() => testMutation.mutate()}
-            >
-              Send test email
-            </Button>
-          </Stack>
-        </Layout.Section>
-      </Layout>
-    </Page>
+            <div className="app-actions-bar">
+              <Button
+                primary
+                loading={saveMutation.isLoading}
+                onClick={() => saveMutation.mutate(form)}
+              >
+                Save settings
+              </Button>
+              <Button
+                loading={testMutation.isLoading}
+                onClick={() => testMutation.mutate()}
+              >
+                Send test email
+              </Button>
+            </div>
+          </Layout.Section>
+        </Layout>
+      </Page>
+    </AppShell>
   );
 }

@@ -1,4 +1,5 @@
 import { hasFeature } from "../services/plans.js";
+import { isMultiStepActive, stripMultiStepFromSchema } from "./multiStep.js";
 
 function isGradientToken(value) {
   return value && typeof value === "object" && value.type === "gradient";
@@ -47,6 +48,14 @@ export function validateFormForPlan(plan, { schema, styles, customCss }) {
     });
   }
 
+  if (isMultiStepActive(schema) && !hasFeature(plan, "multiStep")) {
+    errors.push({
+      field: "schema",
+      message: "Multi-step forms require a Pro or Premium plan.",
+      code: "PLAN_FEATURE",
+    });
+  }
+
   return errors;
 }
 
@@ -74,6 +83,10 @@ export function sanitizeFormForPublic(plan, form) {
       ...schema,
       fields: (schema.fields || []).filter((f) => f.type !== "file"),
     };
+  }
+
+  if (!hasFeature(plan, "multiStep") && isMultiStepActive(schema)) {
+    schema = stripMultiStepFromSchema(schema);
   }
 
   return { ...form, schema, styles, customCss };
