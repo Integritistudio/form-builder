@@ -36,7 +36,6 @@ const shopify = shopifyApp({
     future: {
       customerAddressDefaultFix: true,
       lineItemBilling: true,
-      unstable_managedPricingSupport: true,
     },
     billing: billingConfig,
   },
