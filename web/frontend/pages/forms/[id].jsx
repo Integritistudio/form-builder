@@ -18,7 +18,6 @@ import { useParams, useNavigate } from "react-router-dom";
 
 import { FormRenderer } from "../../components/FormRenderer";
 import DevicePreview from "../../components/DevicePreview";
-import MultiStepEditor from "../../components/MultiStepEditor";
 import {
   FormSettingsPanel,
   FieldListPanel,
@@ -32,7 +31,12 @@ import {
   createField,
 } from "../../../lib/formDefaults.js";
 import { CSS_CLASS_REFERENCE } from "../../../lib/formStyles.js";
-import { isMultiStepActive, getDefaultStepId } from "../../../lib/multiStep.js";
+import {
+  isMultiStepActive,
+  getDefaultStepId,
+  moveFieldWithinStep,
+  moveFieldInSchema,
+} from "../../../lib/multiStep.js";
 
 const TYPE_MAP = { phone: "tel" };
 
@@ -41,7 +45,6 @@ const BASE_FIELD_TYPES = FIELD_TYPES.filter((f) => f.value !== "file");
 const NAV_ITEMS = [
   { id: "general", label: "General" },
   { id: "fields", label: "Fields" },
-  { id: "steps", label: "Steps", pro: true },
   { id: "design", label: "Design" },
   { id: "advanced", label: "Advanced" },
 ];
@@ -132,18 +135,35 @@ export default function FormEditorPage() {
     updateSchema({ fields });
   }
 
-  function moveField(index, direction) {
-    const fields = [...(state.schema?.fields || [])];
-    const target = index + direction;
-    if (target < 0 || target >= fields.length) return;
-    [fields[index], fields[target]] = [fields[target], fields[index]];
-    updateSchema({ fields });
+  function findFieldIndex(fieldId) {
+    return (state.schema?.fields || []).findIndex((f) => f.id === fieldId);
   }
 
-  function removeField(index) {
-    const fields = (state.schema?.fields || []).filter((_, i) => i !== index);
+  function handleMoveField(fieldId, direction) {
+    if (multiStepEnabled) {
+      const stepId =
+        state.schema.steps?.[previewStep]?.id || getDefaultStepId(state.schema);
+      updateLocal({
+        schema: moveFieldWithinStep(state.schema, stepId, fieldId, direction),
+      });
+    } else {
+      const index = findFieldIndex(fieldId);
+      if (index < 0) return;
+      updateLocal({
+        schema: moveFieldInSchema(state.schema, index, direction),
+      });
+    }
+  }
+
+  function handleRemoveField(fieldId) {
+    const fields = (state.schema?.fields || []).filter((f) => f.id !== fieldId);
     updateSchema({ fields });
     setEditingField(null);
+  }
+
+  function openAddFieldModal(type = "text") {
+    setAddType(type);
+    setAddModal(true);
   }
 
   function addField(type = addType) {
@@ -180,9 +200,7 @@ export default function FormEditorPage() {
     }
   }, [multiStepEnabled, previewStep, previewStepCount]);
 
-  const navItems = NAV_ITEMS.filter(
-    (item) => item.id !== "steps" || features.multiStep
-  );
+  const navItems = NAV_ITEMS;
 
   if (isLoading || !state) {
     return (
@@ -302,9 +320,6 @@ export default function FormEditorPage() {
                       {item.id === "fields" && fieldCount > 0 && (
                         <span className="fe-nav-badge">{fieldCount}</span>
                       )}
-                      {item.pro && !features.multiStep && item.id === "steps" && (
-                        <span className="fe-nav-badge">Pro</span>
-                      )}
                     </button>
                   ))}
                 </nav>
@@ -325,32 +340,19 @@ export default function FormEditorPage() {
 
                   {activeSection === "fields" && (
                     <FieldListPanel
-                      fields={state.schema?.fields || []}
-                      steps={state.schema?.steps}
-                      multiStepEnabled={multiStepEnabled}
+                      schema={state.schema}
                       features={features}
-                      onAddType={(type) => {
-                        setAddType(type);
-                        addField(type);
-                      }}
-                      onEdit={setEditingField}
-                      onMove={moveField}
-                      onRemove={removeField}
+                      selectedStep={previewStep}
+                      onSelectStep={setPreviewStep}
+                      onSchemaChange={(nextSchema) =>
+                        updateLocal({ schema: nextSchema })
+                      }
+                      onRequestAddField={openAddFieldModal}
+                      onEditField={(fieldId) => setEditingField(findFieldIndex(fieldId))}
+                      onMoveField={handleMoveField}
+                      onRemoveField={handleRemoveField}
                       onNavigatePlans={() => navigate("/plans")}
                     />
-                  )}
-
-                  {activeSection === "steps" && features.multiStep && (
-                    <div className="fe-panel">
-                      <MultiStepEditor
-                        schema={state.schema}
-                        selectedStep={previewStep}
-                        onSelectStep={setPreviewStep}
-                        onChange={(nextSchema) =>
-                          updateLocal({ schema: nextSchema })
-                        }
-                      />
-                    </div>
                   )}
 
                   {activeSection === "design" && (
@@ -449,7 +451,10 @@ export default function FormEditorPage() {
           open={addModal}
           onClose={() => setAddModal(false)}
           title="Add field"
-          primaryAction={{ content: "Add", onAction: () => addField() }}
+          primaryAction={{
+            content: "Add field",
+            onAction: () => addField(),
+          }}
           secondaryActions={[
             { content: "Cancel", onAction: () => setAddModal(false) },
           ]}
@@ -460,6 +465,7 @@ export default function FormEditorPage() {
               options={availableFieldTypes}
               value={addType}
               onChange={setAddType}
+              helpText="Choose the type of field to add to your form"
             />
           </Modal.Section>
         </Modal>

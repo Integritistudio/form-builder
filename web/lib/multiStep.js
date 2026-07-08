@@ -172,6 +172,40 @@ export function fieldTypeLabel(type) {
   return labels[type] || type;
 }
 
+export function moveFieldWithinStep(schema, stepId, fieldId, direction) {
+  const defaultStepId = getDefaultStepId(schema);
+  const fields = [...(schema.fields || [])];
+  const resolvedStepId = stepId || defaultStepId;
+
+  const stepIndices = fields
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => (f.stepId || defaultStepId) === resolvedStepId)
+    .map(({ i }) => i);
+
+  const currentIndex = fields.findIndex((f) => f.id === fieldId);
+  const posInStep = stepIndices.indexOf(currentIndex);
+  if (posInStep < 0) return schema;
+
+  const targetPos = posInStep + direction;
+  if (targetPos < 0 || targetPos >= stepIndices.length) return schema;
+
+  const swapIndex = stepIndices[targetPos];
+  [fields[currentIndex], fields[swapIndex]] = [
+    fields[swapIndex],
+    fields[currentIndex],
+  ];
+
+  return { ...schema, fields };
+}
+
+export function moveFieldInSchema(schema, fieldIndex, direction) {
+  const fields = [...(schema.fields || [])];
+  const target = fieldIndex + direction;
+  if (target < 0 || target >= fields.length) return schema;
+  [fields[fieldIndex], fields[target]] = [fields[target], fields[fieldIndex]];
+  return { ...schema, fields };
+}
+
 export function stripMultiStepFromSchema(schema) {
   if (!schema) return schema;
   const { multiStep, steps, ...rest } = schema;
