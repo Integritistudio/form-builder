@@ -3,7 +3,7 @@
 client_id = "fd1cc82cf99ec4e9a2dadd99ada93b22"
 application_url = "https://forms.integritistudio.us"
 embedded = true
-name = "integriti-forms"
+name = "FormEase"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
@@ -15,9 +15,9 @@ subpath = "integriti-forms"
 prefix = "apps"
 
 [auth]
-redirect_urls = [ 
-  "https://forms.integritistudio.us/api/auth" 
-  ]
+redirect_urls = [
+  "https://forms.integritistudio.us/api/auth/callback"
+]
 
 [webhooks]
 api_version = "2026-07"

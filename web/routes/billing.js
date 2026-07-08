@@ -8,6 +8,16 @@ function getShop(res) {
   return res.locals.shopify.session.shop;
 }
 
+function isBillingTest() {
+  return process.env.BILLING_TEST !== "false";
+}
+
+function getReturnUrl() {
+  const host = process.env.HOST || process.env.SHOPIFY_APP_URL || "";
+  const base = host.startsWith("http") ? host : `https://${host}`;
+  return `${base.replace(/\/$/, "")}/plans`;
+}
+
 router.post("/subscribe", async (req, res) => {
   try {
     const plan = req.body.plan;
@@ -18,11 +28,12 @@ router.post("/subscribe", async (req, res) => {
     const session = res.locals.shopify.session;
     const shop = getShop(res);
     const { billing } = shopify.api;
+    const isTest = isBillingTest();
 
     const hasPayment = await billing.check({
       session,
       plans: [plan],
-      isTest: process.env.NODE_ENV !== "production",
+      isTest,
     });
 
     if (hasPayment.hasActivePayment) {
@@ -31,13 +42,17 @@ router.post("/subscribe", async (req, res) => {
       return res.json({ success: true, plan: planKey, alreadyActive: true });
     }
 
-    await billing.request({
+    const billingResponse = await billing.request({
       session,
       plan,
-      isTest: process.env.NODE_ENV !== "production",
+      isTest,
+      returnUrl: getReturnUrl(),
     });
 
-    res.json({ success: true, redirecting: true });
+    res.json({
+      success: true,
+      confirmationUrl: billingResponse.confirmationUrl,
+    });
   } catch (err) {
     console.error(err);
     const billingMsg = err.errorData?.[0]?.message;
@@ -74,17 +89,18 @@ router.get("/status", async (req, res) => {
     const session = res.locals.shopify.session;
     const shop = getShop(res);
     const { billing } = shopify.api;
+    const isTest = isBillingTest();
 
     const proCheck = await billing.check({
       session,
       plans: ["Pro"],
-      isTest: process.env.NODE_ENV !== "production",
+      isTest,
     });
 
     const premiumCheck = await billing.check({
       session,
       plans: ["Premium"],
-      isTest: process.env.NODE_ENV !== "production",
+      isTest,
     });
 
     let plan = "free";

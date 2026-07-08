@@ -30,7 +30,7 @@ function buildHtml({ formName, shopName, rows, submittedAt }) {
     </tr>
     <tr>
       <td style="padding:16px 24px;border-top:1px solid #e5e5e5;color:#888;font-size:12px;">
-        Submitted ${escapeHtml(submittedAt)} via Integriti Forms
+        Submitted ${escapeHtml(submittedAt)} via FormEase
       </td>
     </tr>
   </table>
@@ -170,7 +170,7 @@ export async function sendTestEmail(settings) {
     await transporter.sendMail({
       from: settings.smtpUser || settings.emailTo,
       to: settings.emailTo,
-      subject: "Integriti Forms — test email",
+      subject: "FormEase — test email",
       text: "Your SMTP settings are working correctly.",
       html: "<p>Your SMTP settings are working correctly.</p>",
     });

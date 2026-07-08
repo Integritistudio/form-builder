@@ -3,7 +3,12 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { forms } from "../db/schema.js";
 import { getShopSettings } from "../services/shop.js";
-import { PLANS, getFormLimit, getPlanFeatures } from "../services/plans.js";
+import {
+  PLANS,
+  getTotalFormLimit,
+  getActiveFormLimit,
+  getPlanFeatures,
+} from "../services/plans.js";
 
 const router = Router();
 
@@ -35,7 +40,8 @@ router.get("/", async (req, res) => {
       usage: {
         totalForms: total,
         activeForms: active,
-        formLimit: getFormLimit(settings.plan),
+        totalFormLimit: getTotalFormLimit(settings.plan),
+        activeFormLimit: getActiveFormLimit(settings.plan),
       },
       smtpConfigured: Boolean(settings.smtpHost && settings.emailTo),
     });

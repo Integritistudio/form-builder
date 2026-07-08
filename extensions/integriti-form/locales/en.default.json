@@ -1,11 +1,11 @@
 {
   "blocks": {
     "form": {
-      "name": "Integriti Form",
+      "name": "FormEase Form",
       "settings": {
         "form_id": {
           "label": "Form ID",
-          "info": "Paste the Form ID from your Integriti Forms app."
+          "info": "Paste the Form ID from your FormEase app."
         }
       }
     }

@@ -315,7 +315,7 @@ function ThemeGuide({ onPlans }) {
               <span className="app-step-num">2</span>
               <p>
                 Add a section or block and choose{" "}
-                <strong>Integriti Form</strong>
+                <strong>FormEase Form</strong>
               </p>
             </li>
           </ol>
@@ -391,9 +391,17 @@ export default function FormsIndexPage() {
 
   const forms = formsData?.forms || [];
 
-  const atLimit =
-    planData?.plan === "free" &&
-    planData?.usage?.totalForms >= planData?.usage?.formLimit;
+  function formatLimit(value) {
+    return value === Infinity || value == null ? "unlimited" : String(value);
+  }
+
+  const atTotalLimit =
+    planData?.usage?.totalFormLimit !== Infinity &&
+    planData?.usage?.totalForms >= planData?.usage?.totalFormLimit;
+
+  const atActiveLimit =
+    planData?.usage?.activeFormLimit !== Infinity &&
+    planData?.usage?.activeForms >= planData?.usage?.activeFormLimit;
 
   const lastUpdated = new Date().toLocaleDateString(undefined, {
     month: "long",
@@ -404,10 +412,10 @@ export default function FormsIndexPage() {
   return (
     <AppShell>
       <Page fullWidth>
-        <TitleBar title="Integriti Forms">
+        <TitleBar title="FormEase">
           <button
             variant="primary"
-            disabled={atLimit || createMutation.isLoading}
+            disabled={atTotalLimit || createMutation.isLoading}
             onClick={() => createMutation.mutate()}
           >
             Create form
@@ -430,7 +438,7 @@ export default function FormsIndexPage() {
             </Layout.Section>
           )}
 
-          {atLimit && (
+          {planData && atTotalLimit && (
             <Layout.Section>
               <Banner
                 status="info"
@@ -439,8 +447,25 @@ export default function FormsIndexPage() {
                   onAction: () => navigate("/plans"),
                 }}
               >
-                You have reached the free plan limit of 3 forms. Upgrade for
-                unlimited forms.
+                You have reached your plan limit of{" "}
+                {formatLimit(planData.usage.totalFormLimit)} forms. Upgrade to
+                create more.
+              </Banner>
+            </Layout.Section>
+          )}
+
+          {planData && atActiveLimit && !atTotalLimit && (
+            <Layout.Section>
+              <Banner
+                status="info"
+                action={{
+                  content: "View plans",
+                  onAction: () => navigate("/plans"),
+                }}
+              >
+                You have reached your plan limit of{" "}
+                {formatLimit(planData.usage.activeFormLimit)} active forms.
+                Upgrade to activate more.
               </Banner>
             </Layout.Section>
           )}

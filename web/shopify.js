@@ -17,12 +17,12 @@ const sessionStorage = PostgreSQLSessionStorage.withCredentials(
 
 const billingConfig = {
   Pro: {
-    amount: 15,
+    amount: 9.99,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
   },
   Premium: {
-    amount: 20,
+    amount: 14.99,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
   },

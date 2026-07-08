@@ -7,7 +7,10 @@ import { getShopSettings } from "../services/shop.js";
 import {
   canCreateForm,
   canActivateForm,
-  getFormLimit,
+  getTotalFormLimit,
+  getActiveFormLimit,
+  getPlanName,
+  formatLimit,
 } from "../services/plans.js";
 import { validateFormForPlan } from "../lib/planGating.js";
 import { attachFilesToSubmissions } from "../lib/submissionFiles.js";
@@ -54,8 +57,10 @@ router.post("/", async (req, res) => {
       .where(eq(forms.shopDomain, shopDomain));
 
     if (!canCreateForm(settings.plan, count)) {
+      const planName = getPlanName(settings.plan);
+      const limit = formatLimit(getTotalFormLimit(settings.plan));
       return res.status(403).json({
-        error: `Free plan allows up to ${getFormLimit("free")} forms. Upgrade to create more.`,
+        error: `${planName} plan allows up to ${limit} forms. Upgrade to create more.`,
         code: "PLAN_LIMIT",
       });
     }
@@ -141,8 +146,10 @@ router.put("/:id", async (req, res) => {
         );
 
       if (!canActivateForm(settings.plan, count, false)) {
+        const planName = getPlanName(settings.plan);
+        const limit = formatLimit(getActiveFormLimit(settings.plan));
         return res.status(403).json({
-          error: `Free plan allows up to ${getFormLimit("free")} active forms. Upgrade to activate more.`,
+          error: `${planName} plan allows up to ${limit} active forms. Upgrade to activate more.`,
           code: "PLAN_LIMIT",
         });
       }

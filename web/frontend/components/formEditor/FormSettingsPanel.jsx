@@ -93,7 +93,7 @@ export default function FormSettingsPanel({ state, onUpdateName, onUpdateSchema,
       <section className="fe-section fe-section--embed">
         <h3 className="fe-section-title">Add to your theme</h3>
         <p className="fe-section-desc">
-          Paste this Form ID into the Integriti Form block in your theme editor.
+          Paste this Form ID into the FormEase Form block in your theme editor.
         </p>
         <div className="fe-embed-box">
           <code className="fe-embed-id">{state.id}</code>
@@ -101,7 +101,7 @@ export default function FormSettingsPanel({ state, onUpdateName, onUpdateSchema,
         </div>
         <ol className="fe-embed-steps">
           <li>Online Store → Themes → Customize</li>
-          <li>Add the <strong>Integriti Form</strong> block</li>
+          <li>Add the <strong>FormEase Form</strong> block</li>
           <li>Paste your Form ID and save</li>
         </ol>
         {!isActive && (

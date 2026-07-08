@@ -1,7 +1,22 @@
 export const PLANS = {
-  free: { name: "Free", price: 0, formLimit: 3 },
-  pro: { name: "Pro", price: 15, formLimit: Infinity },
-  premium: { name: "Premium", price: 20, formLimit: Infinity },
+  free: {
+    name: "Free",
+    price: 0,
+    totalFormLimit: 5,
+    activeFormLimit: 1,
+  },
+  pro: {
+    name: "Pro",
+    price: 9.99,
+    totalFormLimit: 10,
+    activeFormLimit: 5,
+  },
+  premium: {
+    name: "Premium",
+    price: 14.99,
+    totalFormLimit: Infinity,
+    activeFormLimit: Infinity,
+  },
 };
 
 export const PLAN_FEATURES = {
@@ -26,16 +41,29 @@ export function getPlanFeatures(plan) {
   };
 }
 
-export function getFormLimit(plan) {
-  return PLANS[plan]?.formLimit ?? PLANS.free.formLimit;
+export function getPlanName(plan) {
+  return PLANS[plan]?.name ?? PLANS.free.name;
+}
+
+export function getTotalFormLimit(plan) {
+  return PLANS[plan]?.totalFormLimit ?? PLANS.free.totalFormLimit;
+}
+
+export function getActiveFormLimit(plan) {
+  return PLANS[plan]?.activeFormLimit ?? PLANS.free.activeFormLimit;
+}
+
+export function formatLimit(limit) {
+  return limit === Infinity ? "unlimited" : String(limit);
 }
 
 export function canCreateForm(plan, currentCount) {
-  const limit = getFormLimit(plan);
+  const limit = getTotalFormLimit(plan);
   return currentCount < limit;
 }
 
 export function canActivateForm(plan, activeCount, isCurrentlyActive) {
   if (isCurrentlyActive) return true;
-  return canCreateForm(plan, activeCount);
+  const limit = getActiveFormLimit(plan);
+  return activeCount < limit;
 }
