@@ -20,8 +20,8 @@ function getReturnUrl() {
 
 router.post("/subscribe", async (req, res) => {
   try {
-    const plan = req.body.plan;
-    if (!["Pro", "Premium"].includes(plan)) {
+    const plan = String(req.body.plan || "").toLowerCase();
+    if (!["pro", "premium"].includes(plan)) {
       return res.status(400).json({ error: "Invalid plan" });
     }
 
@@ -37,9 +37,8 @@ router.post("/subscribe", async (req, res) => {
     });
 
     if (hasPayment.hasActivePayment) {
-      const planKey = plan.toLowerCase();
-      await updateShopPlan(shop, planKey);
-      return res.json({ success: true, plan: planKey, alreadyActive: true });
+      await updateShopPlan(shop, plan);
+      return res.json({ success: true, plan, alreadyActive: true });
     }
 
     const billingResponse = await billing.request({
@@ -60,7 +59,7 @@ router.post("/subscribe", async (req, res) => {
       error:
         billingMsg ||
         err.message ||
-        "Billing is unavailable for this app during development.",
+        "Billing is unavailable. Confirm App Store pricing is configured.",
     });
   }
 });
@@ -93,13 +92,13 @@ router.get("/status", async (req, res) => {
 
     const proCheck = await billing.check({
       session,
-      plans: ["Pro"],
+      plans: ["pro"],
       isTest,
     });
 
     const premiumCheck = await billing.check({
       session,
-      plans: ["Premium"],
+      plans: ["premium"],
       isTest,
     });
 

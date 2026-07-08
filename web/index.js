@@ -6,7 +6,8 @@ import express from "express";
 import serveStatic from "serve-static";
 
 import shopify from "./shopify.js";
-import PrivacyWebhookHandlers from "./privacy.js";
+import { completeOAuthCallback } from "./auth-callback.js";
+import { AllWebhookHandlers } from "./webhook-handlers.js";
 import { runMigrations } from "./db/migrate.js";
 import formsRouter from "./routes/forms.js";
 import settingsRouter from "./routes/settings.js";
@@ -34,13 +35,14 @@ await runMigrations();
 app.get(shopify.config.auth.path, shopify.auth.begin());
 app.get(
   shopify.config.auth.callbackPath,
-  shopify.auth.callback(),
+  (req, res, next) => completeOAuthCallback({ req, res, shopify, next }),
   shopify.redirectToShopifyOrAppRoot()
 );
-app.post(
-  shopify.config.webhooks.path,
-  shopify.processWebhooks({ webhookHandlers: PrivacyWebhookHandlers })
-);
+
+const webhookMiddleware = shopify.processWebhooks({
+  webhookHandlers: AllWebhookHandlers,
+});
+app.post(shopify.config.webhooks.path, ...webhookMiddleware);
 
 app.use(express.json());
 

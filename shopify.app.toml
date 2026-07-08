@@ -20,7 +20,7 @@ redirect_urls = [
 ]
 
 [webhooks]
-api_version = "2026-07"
+api_version = "2025-07"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
@@ -29,6 +29,18 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   topics = [ "app_subscriptions/update" ]
   uri = "/api/webhooks"
+
+  [[webhooks.subscriptions]]
+  uri = "/api/webhooks"
+  compliance_topics = [ "customers/data_request" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/api/webhooks"
+  compliance_topics = [ "customers/redact" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/api/webhooks"
+  compliance_topics = [ "shop/redact" ]
 
 [build]
 automatically_update_urls_on_dev = true

@@ -1,5 +1,5 @@
 import "./env.js";
-import { BillingInterval, LATEST_API_VERSION } from "@shopify/shopify-api";
+import { ApiVersion, BillingInterval } from "@shopify/shopify-api";
 import { shopifyApp } from "@shopify/shopify-app-express";
 import { PostgreSQLSessionStorage } from "@shopify/shopify-app-session-storage-postgresql";
 import { restResources } from "@shopify/shopify-api/rest/admin/2024-10";
@@ -15,13 +15,14 @@ const sessionStorage = PostgreSQLSessionStorage.withCredentials(
   { port: db.port }
 );
 
+// Plan names must match Shopify App Store public plans: free, pro, premium
 const billingConfig = {
-  Pro: {
+  pro: {
     amount: 9.99,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
   },
-  Premium: {
+  premium: {
     amount: 14.99,
     currencyCode: "USD",
     interval: BillingInterval.Every30Days,
@@ -30,7 +31,7 @@ const billingConfig = {
 
 const shopify = shopifyApp({
   api: {
-    apiVersion: LATEST_API_VERSION,
+    apiVersion: ApiVersion.July25,
     restResources,
     future: {
       customerAddressDefaultFix: true,

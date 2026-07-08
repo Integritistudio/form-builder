@@ -24,7 +24,7 @@ const PLAN_DETAILS = [
     key: "pro",
     name: "Pro",
     price: "$9.99/mo",
-    billingPlan: "Pro",
+    billingPlan: "pro",
     features: [
       "Up to 10 forms (5 active)",
       "Image file uploads",
@@ -39,7 +39,7 @@ const PLAN_DETAILS = [
     key: "premium",
     name: "Premium",
     price: "$14.99/mo",
-    billingPlan: "Premium",
+    billingPlan: "premium",
     features: [
       "Unlimited forms",
       "Everything in Pro",
@@ -64,8 +64,12 @@ export default function PlansPage() {
   const [upgradingPlan, setUpgradingPlan] = useState(null);
 
   useQuery(["billing-status"], () => apiFetch("/api/billing/status"), {
+    retry: false,
     onSuccess: () => {
       queryClient.invalidateQueries(["plan"]);
+    },
+    onError: () => {
+      // Billing sync can fail on dev stores with managed pricing; plan API still works.
     },
   });
 
