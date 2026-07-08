@@ -49,4 +49,8 @@ const shopify = shopifyApp({
   sessionStorage,
 });
 
+console.log('[DEBUG] SHOPIFY_API_KEY prefix:', process.env.SHOPIFY_API_KEY?.slice(0, 8));
+console.log('[DEBUG] SHOPIFY_API_SECRET prefix:', process.env.SHOPIFY_API_SECRET?.slice(0, 8));
+console.log('[DEBUG] ApiVersion used:', ApiVersion.July25);
+
 export default shopify;
