@@ -18,6 +18,9 @@ if (!process.env.SCOPES) {
 if (!process.env.SHOPIFY_APP_URL && !process.env.HOST) {
   process.env.SHOPIFY_APP_URL = "https://forms.integritistudio.us";
 }
+if (!process.env.HOST && process.env.SHOPIFY_APP_URL) {
+  process.env.HOST = process.env.SHOPIFY_APP_URL;
+}
 
 export function dbConfig() {
   return {

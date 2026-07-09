@@ -4,6 +4,7 @@ import {
   InvalidOAuthError,
 } from "@shopify/shopify-api";
 import { describeSession } from "./lib/session-debug.js";
+import { ensureExpiringOfflineSession } from "./lib/ensure-expiring-session.js";
 
 /**
  * OAuth callback without programmatic webhook registration.
@@ -15,21 +16,25 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
     const callbackResponse = await shopify.api.auth.callback({
       rawRequest: req,
       rawResponse: res,
+      expiring: true,
     });
 
-    await shopify.config.sessionStorage.storeSession(callbackResponse.session);
+    let session = callbackResponse.session;
+    session = await ensureExpiringOfflineSession(shopify, session);
 
-    const sessionInfo = describeSession(callbackResponse.session);
+    await shopify.config.sessionStorage.storeSession(session);
+
+    const sessionInfo = describeSession(session);
     console.log("[auth] OAuth completed:", sessionInfo);
     if (!sessionInfo.hasRefreshToken) {
       console.warn(
-        "[auth] No refresh token on offline session. Public apps need expiring offline tokens — reinstall after deploying expiringOfflineAccessTokens."
+        "[auth] Still no refresh token after expiring OAuth. Check Shopify library version and reinstall the app."
       );
     }
 
     res.locals.shopify = {
       ...res.locals.shopify,
-      session: callbackResponse.session,
+      session,
     };
 
     return next();
