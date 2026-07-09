@@ -2,6 +2,7 @@ import { Router } from "express";
 import shopify from "../shopify.js";
 import { updateShopPlan } from "../services/shop.js";
 import { isDevelopmentStore } from "../services/shop-context.js";
+import { createSubscriptionConfirmationUrl } from "../services/subscription-billing.js";
 import {
   PAID_PLANS,
   getPlanSelectionTargets,
@@ -53,16 +54,41 @@ router.post("/subscribe", async (req, res) => {
     }
 
     const developmentStore = await isDevelopmentStore(session);
+    const isTest = developmentStore || isBillingTest();
     const targets = await getPlanSelectionTargets(session, shop);
+
+    if (developmentStore) {
+      try {
+        const confirmationUrl = await createSubscriptionConfirmationUrl(
+          session,
+          requestedPlan,
+          { isTest: true }
+        );
+        return res.json({
+          success: true,
+          confirmationUrl,
+          isTestCharge: true,
+          billingMethod: "subscription_create",
+        });
+      } catch (subscriptionError) {
+        console.warn(
+          "Dev store subscription create failed, falling back to pricing URLs:",
+          subscriptionError.message
+        );
+      }
+    }
 
     res.json({
       success: true,
       appHandle: targets.appHandle,
+      apiHandle: targets.apiHandle,
+      confirmationUrl: null,
+      legacyManagedUrl: targets.legacyManagedUrl,
       shopifyUrl: targets.shopifyUrl,
       pricingUrl: targets.pricingUrl,
       shopPricingUrl: targets.shopPricingUrl,
-      legacyManagedUrl: targets.legacyManagedUrl,
-      isTestCharge: developmentStore || isBillingTest(),
+      isTestCharge: isTest,
+      billingMethod: "managed_pricing",
     });
   } catch (err) {
     console.error(err);

@@ -20,9 +20,16 @@ export function getStoreHandle(shopDomain) {
   return shopDomain.replace(".myshopify.com", "");
 }
 
-export async function resolveAppHandle(session) {
-  const fromApi = session ? await getInstalledAppHandle(session) : null;
-  return fromApi || getConfiguredAppHandle();
+/**
+ * Billing URLs use the handle from shopify.app.toml / SHOPIFY_APP_HANDLE.
+ * The Admin API app.handle can differ and leads to pricing_plans 404s.
+ */
+export async function resolveAppHandle(_session) {
+  return getConfiguredAppHandle();
+}
+
+export async function getInstalledAppHandleForDebug(session) {
+  return getInstalledAppHandle(session);
 }
 
 export function normalizePlanKey(name) {
@@ -50,11 +57,13 @@ export function resolvePlanFromSubscriptions(appSubscriptions = []) {
 /** Build Shopify App Pricing redirect targets for a shop. */
 export async function getPlanSelectionTargets(session, shopDomain) {
   const appHandle = await resolveAppHandle(session);
+  const apiHandle = session ? await getInstalledAppHandle(session) : null;
   const storeHandle = getStoreHandle(shopDomain);
   const appId = process.env.SHOPIFY_API_KEY;
 
   return {
     appHandle,
+    apiHandle,
     shopifyUrl: `shopify://admin/charges/${appHandle}/pricing_plans`,
     pricingUrl: `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`,
     shopPricingUrl: `https://${shopDomain}/admin/charges/${appHandle}/pricing_plans`,
