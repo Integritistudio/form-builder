@@ -8,6 +8,7 @@ import serveStatic from "serve-static";
 import shopify from "./shopify.js";
 import { completeOAuthCallback } from "./auth-callback.js";
 import { AllWebhookHandlers } from "./webhook-handlers.js";
+import { describeSession } from "./lib/session-debug.js";
 import { runMigrations } from "./db/migrate.js";
 import formsRouter from "./routes/forms.js";
 import settingsRouter from "./routes/settings.js";
@@ -42,13 +43,51 @@ app.get(
 const webhookMiddleware = shopify.processWebhooks({
   webhookHandlers: AllWebhookHandlers,
 });
+console.log(
+  "[webhooks] Handler topics:",
+  Object.keys(AllWebhookHandlers).join(", ")
+);
 app.post(shopify.config.webhooks.path, ...webhookMiddleware);
 
 app.use(express.json());
 
 app.use("/apps/integriti-forms", publicRouter);
 
-app.use("/api", shopify.validateAuthenticatedSession());
+const validateAuthenticatedSession = shopify.validateAuthenticatedSession();
+
+app.use("/api", (req, res, next) => {
+  validateAuthenticatedSession(req, res, (err) => {
+    if (err) {
+      console.error("[session] API auth middleware error:", {
+        path: req.path,
+        method: req.method,
+        shop:
+          req.query.shop ||
+          req.headers["x-shopify-shop-domain"] ||
+          req.headers["x-shopify-shop"],
+        message: err.message,
+        hint:
+          "403 usually means a non-expiring offline token on a public app. Uninstall and reinstall after deploying expiringOfflineAccessTokens.",
+      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Session validation failed",
+          message: err.message,
+        });
+      }
+      return;
+    }
+
+    if (!res.headersSent) {
+      console.log("[session] API request authorized:", {
+        path: req.path,
+        method: req.method,
+        ...describeSession(res.locals.shopify?.session),
+      });
+      next();
+    }
+  });
+});
 
 app.use("/api/forms", formsRouter);
 app.use("/api/settings", settingsRouter);
@@ -68,6 +107,34 @@ app.use("/{*splat}", shopify.ensureInstalledOnShop(), async (_req, res, _next) =
         .toString()
         .replace("%VITE_SHOPIFY_API_KEY%", process.env.SHOPIFY_API_KEY || "")
     );
+});
+
+app.use((err, req, res, _next) => {
+  console.error("[app] Unhandled error:", {
+    path: req.path,
+    method: req.method,
+    message: err.message,
+    hint:
+      err.message?.includes("403 Forbidden")
+        ? "Public apps require expiring offline tokens. Uninstall/reinstall the app after deploy."
+        : undefined,
+  });
+
+  if (!res.headersSent) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+process.on("unhandledRejection", (reason) => {
+  const message =
+    reason instanceof Error ? reason.message : String(reason ?? "unknown");
+  console.error("[app] Unhandled rejection:", {
+    message,
+    hint:
+      message.includes("403 Forbidden")
+        ? "Public apps require expiring offline tokens. Uninstall/reinstall the app after deploy."
+        : undefined,
+  });
 });
 
 app.listen(PORT);

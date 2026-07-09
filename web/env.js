@@ -12,6 +12,12 @@ if (!process.env.SHOPIFY_API_KEY && process.env.CLIENT_ID) {
 if (!process.env.SHOPIFY_API_SECRET && process.env.CLIENT_SECRET) {
   process.env.SHOPIFY_API_SECRET = process.env.CLIENT_SECRET;
 }
+if (!process.env.SCOPES) {
+  process.env.SCOPES = "write_app_proxy,read_products";
+}
+if (!process.env.SHOPIFY_APP_URL && !process.env.HOST) {
+  process.env.SHOPIFY_APP_URL = "https://forms.integritistudio.us";
+}
 
 export function dbConfig() {
   return {

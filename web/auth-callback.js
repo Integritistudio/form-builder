@@ -3,6 +3,7 @@ import {
   CookieNotFound,
   InvalidOAuthError,
 } from "@shopify/shopify-api";
+import { describeSession } from "./lib/session-debug.js";
 
 /**
  * OAuth callback without programmatic webhook registration.
@@ -17,6 +18,14 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
     });
 
     await shopify.config.sessionStorage.storeSession(callbackResponse.session);
+
+    const sessionInfo = describeSession(callbackResponse.session);
+    console.log("[auth] OAuth completed:", sessionInfo);
+    if (!sessionInfo.hasRefreshToken) {
+      console.warn(
+        "[auth] No refresh token on offline session. Public apps need expiring offline tokens — reinstall after deploying expiringOfflineAccessTokens."
+      );
+    }
 
     res.locals.shopify = {
       ...res.locals.shopify,
