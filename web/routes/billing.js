@@ -3,7 +3,7 @@ import shopify from "../shopify.js";
 import { updateShopPlan } from "../services/shop.js";
 import {
   PAID_PLANS,
-  getPlanSelectionUrl,
+  getPlanSelectionExitUrl,
   resolvePlanFromSubscriptions,
 } from "../services/managed-billing.js";
 
@@ -50,21 +50,12 @@ router.post("/subscribe", async (req, res) => {
       return res.json({ success: true, plan: requestedPlan, alreadyActive: true });
     }
 
-    // Shopify App Pricing (Partner Dashboard plans) — redirect to hosted plan page.
-    const confirmationUrl = getPlanSelectionUrl(shop);
-    console.log("[billing] Redirecting to managed pricing:", {
-      shop,
-      requestedPlan,
-      currentPlan,
-      confirmationUrl,
-    });
-
     res.json({
       success: true,
-      confirmationUrl,
+      confirmationUrl: getPlanSelectionExitUrl(shop),
     });
   } catch (err) {
-    console.error("[billing] Subscribe failed:", err);
+    console.error(err);
     res.status(500).json({
       error:
         err.message ||
@@ -96,19 +87,13 @@ router.get("/status", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
     const shop = getShop(res);
-    const { plan, appSubscriptions } = await getActiveBillingState(session);
+    const { plan } = await getActiveBillingState(session);
 
     await updateShopPlan(shop, plan);
 
-    console.log("[billing] Status sync:", {
-      shop,
-      plan,
-      subscriptions: appSubscriptions.map((sub) => sub.name),
-    });
-
     res.json({ plan });
   } catch (err) {
-    console.error("[billing] Status failed:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });

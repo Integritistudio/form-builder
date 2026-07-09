@@ -21,9 +21,6 @@ if (!process.env.SHOPIFY_APP_URL && !process.env.HOST) {
 if (!process.env.HOST && process.env.SHOPIFY_APP_URL) {
   process.env.HOST = process.env.SHOPIFY_APP_URL;
 }
-if (!process.env.SHOPIFY_APP_HANDLE) {
-  process.env.SHOPIFY_APP_HANDLE = "formease";
-}
 
 export function dbConfig() {
   return {

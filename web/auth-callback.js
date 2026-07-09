@@ -3,7 +3,6 @@ import {
   CookieNotFound,
   InvalidOAuthError,
 } from "@shopify/shopify-api";
-import { describeSession } from "./lib/session-debug.js";
 import { ensureExpiringOfflineSession } from "./lib/ensure-expiring-session.js";
 
 /**
@@ -23,14 +22,6 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
     session = await ensureExpiringOfflineSession(shopify, session);
 
     await shopify.config.sessionStorage.storeSession(session);
-
-    const sessionInfo = describeSession(session);
-    console.log("[auth] OAuth completed:", sessionInfo);
-    if (!sessionInfo.hasRefreshToken) {
-      console.warn(
-        "[auth] Still no refresh token after expiring OAuth. Check Shopify library version and reinstall the app."
-      );
-    }
 
     res.locals.shopify = {
       ...res.locals.shopify,
