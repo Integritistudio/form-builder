@@ -4,18 +4,21 @@ export const PLANS = {
     price: 0,
     totalFormLimit: 5,
     activeFormLimit: 1,
+    monthlySubmissionLimit: 500,
   },
   pro: {
     name: "Pro",
     price: 9.99,
     totalFormLimit: 10,
     activeFormLimit: 5,
+    monthlySubmissionLimit: Infinity,
   },
   premium: {
     name: "Premium",
     price: 14.99,
     totalFormLimit: Infinity,
     activeFormLimit: Infinity,
+    monthlySubmissionLimit: Infinity,
   },
 };
 
@@ -51,6 +54,10 @@ export function getTotalFormLimit(plan) {
 
 export function getActiveFormLimit(plan) {
   return PLANS[plan]?.activeFormLimit ?? PLANS.free.activeFormLimit;
+}
+
+export function getMonthlySubmissionLimit(plan) {
+  return PLANS[plan]?.monthlySubmissionLimit ?? PLANS.free.monthlySubmissionLimit;
 }
 
 export function formatLimit(limit) {

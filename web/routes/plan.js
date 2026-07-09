@@ -7,8 +7,10 @@ import {
   PLANS,
   getTotalFormLimit,
   getActiveFormLimit,
+  getMonthlySubmissionLimit,
   getPlanFeatures,
 } from "../services/plans.js";
+import { countMonthlySubmissions } from "../services/submissionLimits.js";
 
 const router = Router();
 
@@ -33,6 +35,9 @@ router.get("/", async (req, res) => {
         and(eq(forms.shopDomain, shopDomain), eq(forms.status, "active"))
       );
 
+    const monthlySubmissions = await countMonthlySubmissions(shopDomain);
+    const monthlySubmissionLimit = getMonthlySubmissionLimit(settings.plan);
+
     res.json({
       plan: settings.plan,
       plans: PLANS,
@@ -42,6 +47,8 @@ router.get("/", async (req, res) => {
         activeForms: active,
         totalFormLimit: getTotalFormLimit(settings.plan),
         activeFormLimit: getActiveFormLimit(settings.plan),
+        monthlySubmissions,
+        monthlySubmissionLimit,
       },
       smtpConfigured: Boolean(settings.smtpHost && settings.emailTo),
     });

@@ -14,7 +14,7 @@ const PLAN_DETAILS = [
     billingPlan: null,
     features: [
       "Up to 5 forms (1 active)",
-      "Unlimited submissions",
+      "500 submissions/month",
       "Email notifications",
       "Theme embed",
       "Basic form styling",
@@ -27,6 +27,7 @@ const PLAN_DETAILS = [
     billingPlan: "pro",
     features: [
       "Up to 10 forms (5 active)",
+      "Unlimited submissions",
       "Image file uploads",
       "Custom CSS",
       "Gradient colors",
@@ -53,6 +54,18 @@ const PLAN_DETAILS = [
 const IS_DEV = import.meta.env.DEV;
 
 const PLAN_RANK = { free: 0, pro: 1, premium: 2 };
+
+function withEmbeddedAppParams(path) {
+  const url = new URL(path, window.location.origin);
+  const current = new URLSearchParams(window.location.search);
+  for (const key of ["shop", "host"]) {
+    const value = current.get(key);
+    if (value && !url.searchParams.has(key)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return `${url.pathname}${url.search}`;
+}
 
 function formatLimit(value) {
   return value === Infinity || value == null ? "unlimited" : String(value);
@@ -99,7 +112,7 @@ export default function PlansPage() {
     {
       onSuccess: (result) => {
         if (result.confirmationUrl) {
-          window.open(result.confirmationUrl, "_top");
+          window.open(withEmbeddedAppParams(result.confirmationUrl), "_top");
           return;
         }
         queryClient.invalidateQueries(["plan"]);
@@ -224,6 +237,11 @@ export default function PlansPage() {
                         {data.usage.totalForms} total
                         {data.usage.totalFormLimit !== Infinity &&
                           ` of ${formatLimit(data.usage.totalFormLimit)}`}
+                      </span>
+                      <span className="app-subdued">
+                        {data.usage.monthlySubmissions} submissions this month
+                        {data.usage.monthlySubmissionLimit !== Infinity &&
+                          ` of ${formatLimit(data.usage.monthlySubmissionLimit)}`}
                       </span>
                     </div>
                   </div>

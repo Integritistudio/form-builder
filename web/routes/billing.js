@@ -52,7 +52,9 @@ router.post("/subscribe", async (req, res) => {
 
     res.json({
       success: true,
-      confirmationUrl: getPlanSelectionExitUrl(shop),
+      confirmationUrl: getPlanSelectionExitUrl(shop, {
+        host: typeof req.query.host === "string" ? req.query.host : undefined,
+      }),
     });
   } catch (err) {
     console.error(err);

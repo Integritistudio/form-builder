@@ -6,6 +6,10 @@ import { db } from "../db/index.js";
 import { forms, submissions, submissionFiles } from "../db/schema.js";
 import { validateSubmission } from "../lib/validation.js";
 import { getShopSettings } from "../services/shop.js";
+import {
+  getSubmissionUsage,
+  monthlyLimitErrorMessage,
+} from "../services/submissionLimits.js";
 import { sendSubmissionEmail } from "../services/email.js";
 import { appProxyMiddleware } from "../middleware/verifyAppProxy.js";
 import { submitRateLimiter } from "../middleware/rateLimit.js";
@@ -285,6 +289,14 @@ router.post("/forms/:id/submit", submitRateLimiter, async (req, res) => {
     }
 
     const settings = await getShopSettings(shopDomain);
+    const submissionUsage = await getSubmissionUsage(shopDomain, settings.plan);
+    if (!submissionUsage.canSubmit) {
+      return res.status(429).json({
+        error: monthlyLimitErrorMessage(settings.plan),
+        code: "MONTHLY_SUBMISSION_LIMIT",
+      });
+    }
+
     const rawData = req.body.data || req.body;
     const errors = await validateSubmission(form.schema, rawData, {
       plan: settings.plan,

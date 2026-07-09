@@ -43,7 +43,13 @@ export function getPlanSelectionUrl(shopDomain) {
 }
 
 /** Break out of the embedded iframe before opening Shopify's hosted pricing page. */
-export function getPlanSelectionExitUrl(shopDomain) {
+export function getPlanSelectionExitUrl(shopDomain, { host } = {}) {
   const pricingUrl = getPlanSelectionUrl(shopDomain);
-  return `/exitIframe?redirectUri=${encodeURIComponent(pricingUrl)}`;
+  const params = new URLSearchParams();
+  params.set("redirectUri", pricingUrl);
+  params.set("shop", shopDomain);
+  if (host) {
+    params.set("host", host);
+  }
+  return `/exitIframe?${params.toString()}`;
 }
