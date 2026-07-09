@@ -3,6 +3,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { forms } from "../db/schema.js";
 import { getShopSettings } from "../services/shop.js";
+import { isDevelopmentStore } from "../services/shop-context.js";
 import {
   PLANS,
   getTotalFormLimit,
@@ -37,9 +38,12 @@ router.get("/", async (req, res) => {
 
     const monthlySubmissions = await countMonthlySubmissions(shopDomain);
     const monthlySubmissionLimit = getMonthlySubmissionLimit(settings.plan);
+    const session = res.locals.shopify.session;
+    const developmentStore = await isDevelopmentStore(session);
 
     res.json({
       plan: settings.plan,
+      developmentStore,
       plans: PLANS,
       features: getPlanFeatures(settings.plan),
       usage: {

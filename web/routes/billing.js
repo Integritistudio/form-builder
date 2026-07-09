@@ -1,9 +1,10 @@
 import { Router } from "express";
 import shopify from "../shopify.js";
 import { updateShopPlan } from "../services/shop.js";
+import { isDevelopmentStore } from "../services/shop-context.js";
 import {
   PAID_PLANS,
-  getPlanSelectionExitUrl,
+  getPlanSelectionUrl,
   resolvePlanFromSubscriptions,
 } from "../services/managed-billing.js";
 
@@ -50,11 +51,18 @@ router.post("/subscribe", async (req, res) => {
       return res.json({ success: true, plan: requestedPlan, alreadyActive: true });
     }
 
+    if (await isDevelopmentStore(session)) {
+      await updateShopPlan(shop, requestedPlan);
+      return res.json({
+        success: true,
+        plan: requestedPlan,
+        developmentStore: true,
+      });
+    }
+
     res.json({
       success: true,
-      confirmationUrl: getPlanSelectionExitUrl(shop, {
-        host: typeof req.query.host === "string" ? req.query.host : undefined,
-      }),
+      pricingUrl: getPlanSelectionUrl(shop),
     });
   } catch (err) {
     console.error(err);
@@ -68,8 +76,12 @@ router.post("/subscribe", async (req, res) => {
 
 router.post("/dev/activate", async (req, res) => {
   try {
+    const session = res.locals.shopify.session;
     if (process.env.NODE_ENV === "production") {
-      return res.status(403).json({ error: "Not available in production." });
+      const devStore = await isDevelopmentStore(session);
+      if (!devStore) {
+        return res.status(403).json({ error: "Not available in production." });
+      }
     }
 
     const plan = String(req.body.plan || "").toLowerCase();

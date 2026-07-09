@@ -51,21 +51,8 @@ const PLAN_DETAILS = [
   },
 ];
 
-const IS_DEV = import.meta.env.DEV;
-
+const IS_LOCAL_DEV = import.meta.env.DEV;
 const PLAN_RANK = { free: 0, pro: 1, premium: 2 };
-
-function withEmbeddedAppParams(path) {
-  const url = new URL(path, window.location.origin);
-  const current = new URLSearchParams(window.location.search);
-  for (const key of ["shop", "host"]) {
-    const value = current.get(key);
-    if (value && !url.searchParams.has(key)) {
-      url.searchParams.set(key, value);
-    }
-  }
-  return `${url.pathname}${url.search}`;
-}
 
 function formatLimit(value) {
   return value === Infinity || value == null ? "unlimited" : String(value);
@@ -111,16 +98,18 @@ export default function PlansPage() {
       }),
     {
       onSuccess: (result) => {
-        if (result.confirmationUrl) {
-          window.open(withEmbeddedAppParams(result.confirmationUrl), "_top");
+        if (result.pricingUrl) {
+          window.open(result.pricingUrl, "_top");
           return;
         }
         queryClient.invalidateQueries(["plan"]);
         setMessage({
           status: "success",
-          text: result.alreadyActive
-            ? `You are already on the ${result.plan} plan.`
-            : "Plan updated successfully.",
+          text: result.developmentStore
+            ? `Plan set to ${result.plan} (development store).`
+            : result.alreadyActive
+              ? `You are already on the ${result.plan} plan.`
+              : "Plan updated successfully.",
         });
         setUpgradingPlan(null);
       },
@@ -132,6 +121,7 @@ export default function PlansPage() {
   );
 
   const currentPlan = data?.plan || "free";
+  const canTestPlans = IS_LOCAL_DEV || data?.developmentStore === true;
 
   function handleUpgrade(billingPlan) {
     setUpgradingPlan(billingPlan);
@@ -147,7 +137,7 @@ export default function PlansPage() {
       );
     }
 
-    if (IS_DEV) {
+    if (canTestPlans) {
       return (
         <button
           type="button"
@@ -202,12 +192,12 @@ export default function PlansPage() {
             />
           </Layout.Section>
 
-          {IS_DEV && (
+          {canTestPlans && (
             <Layout.Section>
               <Banner status="info">
-                Development mode: use the buttons below to switch plans and test
-                Pro/Premium features. Paid billing is not available for custom
-                apps until the app is published.
+                {IS_LOCAL_DEV
+                  ? "Development mode: use the buttons below to switch plans and test Pro/Premium features."
+                  : "Development store: plan changes apply immediately for testing. Live billing applies on production stores."}
               </Banner>
             </Layout.Section>
           )}

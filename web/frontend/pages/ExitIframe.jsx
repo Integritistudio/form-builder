@@ -11,21 +11,23 @@ export default function ExitIframe() {
   app.loading(true);
 
   useEffect(() => {
-    if (!!app && !!search) {
-      const params = new URLSearchParams(search);
-      const redirectUri = params.get("redirectUri");
-      const url = new URL(decodeURIComponent(redirectUri));
+    if (!search) return;
 
-      if (
-        [location.hostname, "admin.shopify.com"].includes(url.hostname) ||
-        url.hostname.endsWith(".myshopify.com")
-      ) {
-        window.open(url, "_top");
-      } else {
-        setShowWarning(true);
-      }
+    const params = new URLSearchParams(search);
+    const redirectUri = params.get("redirectUri");
+    if (!redirectUri) return;
+
+    const url = new URL(decodeURIComponent(redirectUri));
+
+    if (
+      [location.hostname, "admin.shopify.com"].includes(url.hostname) ||
+      url.hostname.endsWith(".myshopify.com")
+    ) {
+      window.open(url, "_top");
+    } else {
+      setShowWarning(true);
     }
-  }, [app, search, setShowWarning]);
+  }, [search]);
 
   return showWarning ? (
     <Page narrowWidth>
