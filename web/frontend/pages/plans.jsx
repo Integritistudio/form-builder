@@ -224,14 +224,14 @@ export default function PlansPage() {
             </Layout.Section>
           )}
 
-          {data?.developmentStore && !IS_LOCAL_DEV && (
+          {/* {data?.developmentStore && !IS_LOCAL_DEV && (
             <Layout.Section>
               <Banner status="info">
                 Development store: upgrading opens Shopify&apos;s test charge
                 approval screen. You won&apos;t be billed on a dev store.
               </Banner>
             </Layout.Section>
-          )}
+          )} */}
 
           {isLoading ? (
             <Layout.Section>

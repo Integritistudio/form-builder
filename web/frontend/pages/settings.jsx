@@ -207,14 +207,6 @@ export default function SettingsPage() {
           </Layout.Section>
 
           <Layout.Section>
-            <Banner status="info">
-              If test emails fail with a timeout or DNS error, try disabling your VPN
-              or firewall — many networks block outbound SMTP on ports 587 and 465.
-              Submissions are still saved even when email delivery fails.
-            </Banner>
-          </Layout.Section>
-
-          <Layout.Section>
             <div className="app-panel app-section-gap">
               <div className="app-panel-header">
                 <h2 className="app-panel-title">SMTP server</h2>
