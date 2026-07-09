@@ -117,8 +117,14 @@ export default function PlansPage() {
       }),
     {
       onSuccess: (result) => {
-        if (result.pricingUrl) {
-          window.open(result.pricingUrl, "_top");
+        const redirectUrl =
+          result.shopifyUrl ||
+          result.pricingUrl ||
+          result.shopPricingUrl ||
+          result.legacyManagedUrl;
+
+        if (redirectUrl) {
+          window.open(redirectUrl, "_top");
           return;
         }
         queryClient.invalidateQueries(["plan"]);
@@ -220,9 +226,10 @@ export default function PlansPage() {
           {data?.developmentStore && !IS_LOCAL_DEV && (
             <Layout.Section>
               <Banner status="info">
-                Development store: upgrading opens Shopify&apos;s billing page
-                with a test charge. Approve the subscription to activate the
-                plan — you won&apos;t be billed on a dev store.
+                Development store: upgrading opens Shopify&apos;s billing page with
+                a test charge. If you land on the apps list instead, run{" "}
+                <code>shopify app deploy</code> after pulling the latest code and
+                confirm pricing plans are saved in Partner Dashboard.
               </Banner>
             </Layout.Section>
           )}

@@ -1,3 +1,5 @@
+import { getInstalledAppHandle } from "./shop-context.js";
+
 /** Plan keys must match Partner Dashboard public plan handles: free, pro, premium */
 export const PAID_PLANS = ["pro", "premium"];
 
@@ -10,12 +12,17 @@ const PLAN_ALIASES = {
   free: "free",
 };
 
-export function getAppHandle() {
+export function getConfiguredAppHandle() {
   return process.env.SHOPIFY_APP_HANDLE || "formease";
 }
 
 export function getStoreHandle(shopDomain) {
   return shopDomain.replace(".myshopify.com", "");
+}
+
+export async function resolveAppHandle(session) {
+  const fromApi = session ? await getInstalledAppHandle(session) : null;
+  return fromApi || getConfiguredAppHandle();
 }
 
 export function normalizePlanKey(name) {
@@ -40,21 +47,38 @@ export function resolvePlanFromSubscriptions(appSubscriptions = []) {
   return plan;
 }
 
-/** Shopify App Pricing plan selection page (hosted by Shopify admin). */
-export function getPlanSelectionUrl(shopDomain) {
-  const appHandle = getAppHandle();
+/** Build Shopify App Pricing redirect targets for a shop. */
+export async function getPlanSelectionTargets(session, shopDomain) {
+  const appHandle = await resolveAppHandle(session);
   const storeHandle = getStoreHandle(shopDomain);
-  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+  const appId = process.env.SHOPIFY_API_KEY;
+
+  return {
+    appHandle,
+    shopifyUrl: `shopify://admin/charges/${appHandle}/pricing_plans`,
+    pricingUrl: `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`,
+    shopPricingUrl: `https://${shopDomain}/admin/charges/${appHandle}/pricing_plans`,
+    legacyManagedUrl: appId
+      ? `https://${shopDomain}/admin/billing/managed_pricing/plans?app_id=${appId}`
+      : null,
+  };
+}
+
+/** Preferred URL for embedded apps (App Bridge / admin deep link). */
+export async function getPlanSelectionUrl(session, shopDomain) {
+  const targets = await getPlanSelectionTargets(session, shopDomain);
+  return targets.shopifyUrl;
 }
 
 /** Break out of the embedded iframe before opening Shopify's hosted pricing page. */
-export function getPlanSelectionExitUrl(shopDomain, { host } = {}) {
-  const pricingUrl = getPlanSelectionUrl(shopDomain);
+export async function getPlanSelectionExitUrl(session, shopDomain, { host } = {}) {
+  const targets = await getPlanSelectionTargets(session, shopDomain);
   const params = new URLSearchParams();
-  params.set("redirectUri", pricingUrl);
+  params.set("redirectUri", targets.pricingUrl);
   params.set("shop", shopDomain);
   if (host) {
     params.set("host", host);
   }
+  params.set("embedded", "1");
   return `/exitIframe?${params.toString()}`;
 }

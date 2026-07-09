@@ -4,7 +4,7 @@ import { updateShopPlan } from "../services/shop.js";
 import { isDevelopmentStore } from "../services/shop-context.js";
 import {
   PAID_PLANS,
-  getPlanSelectionUrl,
+  getPlanSelectionTargets,
   normalizePlanKey,
   resolvePlanFromSubscriptions,
 } from "../services/managed-billing.js";
@@ -53,10 +53,15 @@ router.post("/subscribe", async (req, res) => {
     }
 
     const developmentStore = await isDevelopmentStore(session);
+    const targets = await getPlanSelectionTargets(session, shop);
 
     res.json({
       success: true,
-      pricingUrl: getPlanSelectionUrl(shop),
+      appHandle: targets.appHandle,
+      shopifyUrl: targets.shopifyUrl,
+      pricingUrl: targets.pricingUrl,
+      shopPricingUrl: targets.shopPricingUrl,
+      legacyManagedUrl: targets.legacyManagedUrl,
       isTestCharge: developmentStore || isBillingTest(),
     });
   } catch (err) {
