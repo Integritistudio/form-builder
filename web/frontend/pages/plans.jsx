@@ -58,15 +58,34 @@ function formatLimit(value) {
   return value === Infinity || value == null ? "unlimited" : String(value);
 }
 
+function billingStatusUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const planHandle = params.get("plan_handle");
+  if (!planHandle) return "/api/billing/status";
+  const query = new URLSearchParams({ plan_handle: planHandle });
+  return `/api/billing/status?${query.toString()}`;
+}
+
 export default function PlansPage() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState(null);
   const [upgradingPlan, setUpgradingPlan] = useState(null);
 
-  useQuery(["billing-status"], () => apiFetch("/api/billing/status"), {
+  useQuery(["billing-status"], () => apiFetch(billingStatusUrl()), {
     retry: false,
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries(["plan"]);
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("plan_handle") && result.plan) {
+        setMessage({
+          status: "success",
+          text: `Subscription approved. You are now on the ${result.plan} plan.`,
+        });
+        params.delete("plan_handle");
+        const nextSearch = params.toString();
+        const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
+        window.history.replaceState({}, "", nextUrl);
+      }
     },
     onError: () => {
       // Billing sync can fail on dev stores with managed pricing; plan API still works.
@@ -105,11 +124,9 @@ export default function PlansPage() {
         queryClient.invalidateQueries(["plan"]);
         setMessage({
           status: "success",
-          text: result.developmentStore
-            ? `Plan set to ${result.plan} (development store).`
-            : result.alreadyActive
-              ? `You are already on the ${result.plan} plan.`
-              : "Plan updated successfully.",
+          text: result.alreadyActive
+            ? `You are already on the ${result.plan} plan.`
+            : "Plan updated successfully.",
         });
         setUpgradingPlan(null);
       },
@@ -121,7 +138,6 @@ export default function PlansPage() {
   );
 
   const currentPlan = data?.plan || "free";
-  const canTestPlans = IS_LOCAL_DEV || data?.developmentStore === true;
 
   function handleUpgrade(billingPlan) {
     setUpgradingPlan(billingPlan);
@@ -137,7 +153,7 @@ export default function PlansPage() {
       );
     }
 
-    if (canTestPlans) {
+    if (IS_LOCAL_DEV) {
       return (
         <button
           type="button"
@@ -192,12 +208,21 @@ export default function PlansPage() {
             />
           </Layout.Section>
 
-          {canTestPlans && (
+          {IS_LOCAL_DEV && (
             <Layout.Section>
               <Banner status="info">
-                {IS_LOCAL_DEV
-                  ? "Development mode: use the buttons below to switch plans and test Pro/Premium features."
-                  : "Development store: plan changes apply immediately for testing. Live billing applies on production stores."}
+                Local development: use the buttons below to switch plans without
+                Shopify billing.
+              </Banner>
+            </Layout.Section>
+          )}
+
+          {data?.developmentStore && !IS_LOCAL_DEV && (
+            <Layout.Section>
+              <Banner status="info">
+                Development store: upgrading opens Shopify&apos;s billing page
+                with a test charge. Approve the subscription to activate the
+                plan — you won&apos;t be billed on a dev store.
               </Banner>
             </Layout.Section>
           )}

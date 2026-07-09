@@ -16,10 +16,13 @@ if (!process.env.SCOPES) {
   process.env.SCOPES = "write_app_proxy,read_products";
 }
 if (!process.env.SHOPIFY_APP_URL && !process.env.HOST) {
-  process.env.SHOPIFY_APP_URL = "https://forms.integritistudio.us";
+  process.env.SHOPIFY_APP_URL = "https://formease.integritistudio.us";
 }
 if (!process.env.HOST && process.env.SHOPIFY_APP_URL) {
   process.env.HOST = process.env.SHOPIFY_APP_URL;
+}
+if (!process.env.SHOPIFY_APP_HANDLE) {
+  process.env.SHOPIFY_APP_HANDLE = "formease";
 }
 
 export function dbConfig() {

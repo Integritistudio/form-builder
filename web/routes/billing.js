@@ -5,6 +5,7 @@ import { isDevelopmentStore } from "../services/shop-context.js";
 import {
   PAID_PLANS,
   getPlanSelectionUrl,
+  normalizePlanKey,
   resolvePlanFromSubscriptions,
 } from "../services/managed-billing.js";
 
@@ -51,18 +52,12 @@ router.post("/subscribe", async (req, res) => {
       return res.json({ success: true, plan: requestedPlan, alreadyActive: true });
     }
 
-    if (await isDevelopmentStore(session)) {
-      await updateShopPlan(shop, requestedPlan);
-      return res.json({
-        success: true,
-        plan: requestedPlan,
-        developmentStore: true,
-      });
-    }
+    const developmentStore = await isDevelopmentStore(session);
 
     res.json({
       success: true,
       pricingUrl: getPlanSelectionUrl(shop),
+      isTestCharge: developmentStore || isBillingTest(),
     });
   } catch (err) {
     console.error(err);
@@ -76,12 +71,10 @@ router.post("/subscribe", async (req, res) => {
 
 router.post("/dev/activate", async (req, res) => {
   try {
-    const session = res.locals.shopify.session;
     if (process.env.NODE_ENV === "production") {
-      const devStore = await isDevelopmentStore(session);
-      if (!devStore) {
-        return res.status(403).json({ error: "Not available in production." });
-      }
+      return res.status(403).json({
+        error: "Use Shopify billing to change plans in production.",
+      });
     }
 
     const plan = String(req.body.plan || "").toLowerCase();
@@ -101,6 +94,14 @@ router.get("/status", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
     const shop = getShop(res);
+
+    if (typeof req.query.plan_handle === "string") {
+      const plan = normalizePlanKey(req.query.plan_handle);
+      if (plan) {
+        await updateShopPlan(shop, plan);
+      }
+    }
+
     const { plan } = await getActiveBillingState(session);
 
     await updateShopPlan(shop, plan);

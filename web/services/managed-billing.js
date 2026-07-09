@@ -10,6 +10,14 @@ const PLAN_ALIASES = {
   free: "free",
 };
 
+export function getAppHandle() {
+  return process.env.SHOPIFY_APP_HANDLE || "formease";
+}
+
+export function getStoreHandle(shopDomain) {
+  return shopDomain.replace(".myshopify.com", "");
+}
+
 export function normalizePlanKey(name) {
   const key = String(name || "")
     .toLowerCase()
@@ -32,14 +40,11 @@ export function resolvePlanFromSubscriptions(appSubscriptions = []) {
   return plan;
 }
 
-/** Shopify App Pricing plan selection (uses API key / client id, not app handle slug). */
+/** Shopify App Pricing plan selection page (hosted by Shopify admin). */
 export function getPlanSelectionUrl(shopDomain) {
-  const appId = process.env.SHOPIFY_API_KEY;
-  if (!appId) {
-    throw new Error("SHOPIFY_API_KEY is required for billing redirects");
-  }
-
-  return `https://${shopDomain}/admin/billing/managed_pricing/plans?app_id=${appId}`;
+  const appHandle = getAppHandle();
+  const storeHandle = getStoreHandle(shopDomain);
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
 }
 
 /** Break out of the embedded iframe before opening Shopify's hosted pricing page. */
