@@ -16,9 +16,11 @@ export const AppSpecificWebhookHandlers = {
         const name = payload.app_subscription?.name;
 
         if (status === "ACTIVE" && name) {
-          const plan = name.toLowerCase();
-          if (["pro", "premium"].includes(plan)) {
-            await updateShopPlan(shop, plan);
+          const plan = name.toLowerCase().trim();
+          const normalized =
+            plan === "peo" ? "pro" : plan;
+          if (["pro", "premium"].includes(normalized)) {
+            await updateShopPlan(shop, normalized);
           }
         } else if (status === "CANCELLED" || status === "EXPIRED") {
           await updateShopPlan(shop, "free");

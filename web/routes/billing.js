@@ -1,6 +1,11 @@
 import { Router } from "express";
 import shopify from "../shopify.js";
 import { updateShopPlan } from "../services/shop.js";
+import {
+  PAID_PLANS,
+  getPlanSelectionUrl,
+  resolvePlanFromSubscriptions,
+} from "../services/managed-billing.js";
 
 const router = Router();
 
@@ -12,54 +17,58 @@ function isBillingTest() {
   return process.env.BILLING_TEST !== "false";
 }
 
-function getReturnUrl() {
-  const host = process.env.HOST || process.env.SHOPIFY_APP_URL || "";
-  const base = host.startsWith("http") ? host : `https://${host}`;
-  return `${base.replace(/\/$/, "")}/plans`;
+async function getActiveBillingState(session) {
+  const { billing } = shopify.api;
+  const result = await billing.check({
+    session,
+    isTest: isBillingTest(),
+    returnObject: true,
+  });
+
+  const plan = resolvePlanFromSubscriptions(result.appSubscriptions);
+
+  return {
+    plan,
+    hasActivePayment: result.hasActivePayment,
+    appSubscriptions: result.appSubscriptions,
+  };
 }
 
 router.post("/subscribe", async (req, res) => {
   try {
-    const plan = String(req.body.plan || "").toLowerCase();
-    if (!["pro", "premium"].includes(plan)) {
+    const requestedPlan = String(req.body.plan || "").toLowerCase();
+    if (!PAID_PLANS.includes(requestedPlan)) {
       return res.status(400).json({ error: "Invalid plan" });
     }
 
     const session = res.locals.shopify.session;
     const shop = getShop(res);
-    const { billing } = shopify.api;
-    const isTest = isBillingTest();
+    const { plan: currentPlan } = await getActiveBillingState(session);
 
-    const hasPayment = await billing.check({
-      session,
-      plans: [plan],
-      isTest,
-    });
-
-    if (hasPayment.hasActivePayment) {
-      await updateShopPlan(shop, plan);
-      return res.json({ success: true, plan, alreadyActive: true });
+    if (currentPlan === requestedPlan) {
+      await updateShopPlan(shop, requestedPlan);
+      return res.json({ success: true, plan: requestedPlan, alreadyActive: true });
     }
 
-    const billingResponse = await billing.request({
-      session,
-      plan,
-      isTest,
-      returnUrl: getReturnUrl(),
+    // Shopify App Pricing (Partner Dashboard plans) — redirect to hosted plan page.
+    const confirmationUrl = getPlanSelectionUrl(shop);
+    console.log("[billing] Redirecting to managed pricing:", {
+      shop,
+      requestedPlan,
+      currentPlan,
+      confirmationUrl,
     });
 
     res.json({
       success: true,
-      confirmationUrl: billingResponse.confirmationUrl,
+      confirmationUrl,
     });
   } catch (err) {
-    console.error(err);
-    const billingMsg = err.errorData?.[0]?.message;
+    console.error("[billing] Subscribe failed:", err);
     res.status(500).json({
       error:
-        billingMsg ||
         err.message ||
-        "Billing is unavailable. Confirm App Store pricing is configured.",
+        "Billing is unavailable. Confirm App Store pricing is configured in Partner Dashboard.",
     });
   }
 });
@@ -87,30 +96,19 @@ router.get("/status", async (req, res) => {
   try {
     const session = res.locals.shopify.session;
     const shop = getShop(res);
-    const { billing } = shopify.api;
-    const isTest = isBillingTest();
-
-    const proCheck = await billing.check({
-      session,
-      plans: ["pro"],
-      isTest,
-    });
-
-    const premiumCheck = await billing.check({
-      session,
-      plans: ["premium"],
-      isTest,
-    });
-
-    let plan = "free";
-    if (premiumCheck.hasActivePayment) plan = "premium";
-    else if (proCheck.hasActivePayment) plan = "pro";
+    const { plan, appSubscriptions } = await getActiveBillingState(session);
 
     await updateShopPlan(shop, plan);
 
+    console.log("[billing] Status sync:", {
+      shop,
+      plan,
+      subscriptions: appSubscriptions.map((sub) => sub.name),
+    });
+
     res.json({ plan });
   } catch (err) {
-    console.error(err);
+    console.error("[billing] Status failed:", err);
     res.status(500).json({ error: err.message });
   }
 });
