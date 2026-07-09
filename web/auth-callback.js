@@ -5,9 +5,9 @@ import {
 } from "@shopify/shopify-api";
 
 /**
- * OAuth callback that completes install even if webhook registration fails.
- * Public apps must declare compliance webhooks in Partner Dashboard / TOML;
- * programmatic registration of mandatory topics can return 403.
+ * OAuth callback without programmatic webhook registration.
+ * All webhooks are app-specific and declared in shopify.app.toml (deploy with
+ * `shopify app deploy`). Compliance topics cannot be registered via API (403).
  */
 export async function completeOAuthCallback({ req, res, shopify, next }) {
   try {
@@ -17,22 +17,6 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
     });
 
     await shopify.config.sessionStorage.storeSession(callbackResponse.session);
-
-    if (!callbackResponse.session.isOnline) {
-      try {
-        await shopify.api.webhooks.register({
-          session: callbackResponse.session,
-        });
-      } catch (webhookErr) {
-        console.warn(
-          `[webhooks] Registration failed during install for ${callbackResponse.session.shop}:`,
-          webhookErr.message
-        );
-        console.warn(
-          "[webhooks] Install continues. Run `shopify app deploy` and verify compliance webhook URLs in Partner Dashboard."
-        );
-      }
-    }
 
     res.locals.shopify = {
       ...res.locals.shopify,

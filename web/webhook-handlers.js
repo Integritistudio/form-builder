@@ -4,8 +4,8 @@ import { db } from "./db/index.js";
 import { forms, submissions, shopSettings } from "./db/schema.js";
 import { updateShopPlan } from "./services/shop.js";
 
-/** Handlers registered during OAuth (excludes mandatory compliance topics). */
-export const RegisterableWebhookHandlers = {
+/** App-specific webhooks (declared in shopify.app.toml, not registered via API). */
+export const AppSpecificWebhookHandlers = {
   APP_SUBSCRIPTIONS_UPDATE: {
     deliveryMethod: DeliveryMethod.Http,
     callbackUrl: "/api/webhooks",
@@ -38,7 +38,7 @@ export const RegisterableWebhookHandlers = {
   },
 };
 
-/** Mandatory compliance handlers (Partner Dashboard / TOML only — not OAuth-registered). */
+/** Mandatory compliance handlers (shopify.app.toml only — cannot be API-registered). */
 export const ComplianceWebhookHandlers = {
   CUSTOMERS_DATA_REQUEST: {
     deliveryMethod: DeliveryMethod.Http,
@@ -64,6 +64,6 @@ export const ComplianceWebhookHandlers = {
 };
 
 export const AllWebhookHandlers = {
-  ...RegisterableWebhookHandlers,
+  ...AppSpecificWebhookHandlers,
   ...ComplianceWebhookHandlers,
 };
