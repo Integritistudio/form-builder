@@ -229,8 +229,9 @@ function FormsTable({
                       type="button"
                       className="app-form-link"
                       onClick={() => onEdit(form.id)}
+                      title={form.name}
                     >
-                      {form.name}
+                      <span className="app-form-link-label">{form.name}</span>
                     </button>
                   </td>
                   <td>
