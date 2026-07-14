@@ -76,12 +76,15 @@ export default function PlansPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries(["plan"]);
       const params = new URLSearchParams(window.location.search);
-      if (params.get("plan_handle") && result.plan) {
+      const returnedFromCharge =
+        params.has("plan_handle") || params.has("charge_id");
+      if (returnedFromCharge && result.plan) {
         setMessage({
           status: "success",
           text: `Subscription approved. You are now on the ${result.plan} plan.`,
         });
         params.delete("plan_handle");
+        params.delete("charge_id");
         const nextSearch = params.toString();
         const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`;
         window.history.replaceState({}, "", nextUrl);

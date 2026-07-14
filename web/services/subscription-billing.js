@@ -23,12 +23,27 @@ const SUBSCRIPTION_CREATE = `#graphql
   }
 `;
 
-function getReturnUrl() {
+/**
+ * After charge approval Shopify redirects here. Must include shop (and host)
+ * or ensureInstalledOnShop() responds with "No shop provided".
+ */
+function getReturnUrl(shop) {
+  const apiKey = process.env.SHOPIFY_API_KEY;
+  const storeHandle = shop.replace(/\.myshopify\.com$/i, "");
+
+  // Prefer the embedded Admin URL so the merchant lands back inside the app iframe.
+  if (apiKey) {
+    return `https://admin.shopify.com/store/${storeHandle}/apps/${apiKey}/plans`;
+  }
+
   const base = process.env.SHOPIFY_APP_URL || process.env.HOST;
   if (!base) {
     throw new Error("SHOPIFY_APP_URL is required for billing redirects");
   }
-  return `${base.replace(/\/$/, "")}/plans`;
+
+  const host = Buffer.from(`${shop}/admin`).toString("base64");
+  const params = new URLSearchParams({ shop, host });
+  return `${base.replace(/\/$/, "")}/plans?${params.toString()}`;
 }
 
 /**
@@ -45,11 +60,15 @@ export async function createSubscriptionConfirmationUrl(
     throw new Error("Invalid paid plan");
   }
 
+  if (!session?.shop) {
+    throw new Error("Shop is required for billing redirects");
+  }
+
   const client = new shopify.api.clients.Graphql({ session });
   const response = await client.request(SUBSCRIPTION_CREATE, {
     variables: {
       name: plan.name,
-      returnUrl: getReturnUrl(),
+      returnUrl: getReturnUrl(session.shop),
       test: isTest,
       lineItems: [
         {
