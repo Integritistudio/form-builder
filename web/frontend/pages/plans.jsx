@@ -66,10 +66,25 @@ function billingStatusUrl() {
   return `/api/billing/status?${query.toString()}`;
 }
 
+function applyBillingRedirect(result) {
+  const redirectUrl =
+    result.confirmationUrl ||
+    result.legacyManagedUrl ||
+    result.pricingUrl ||
+    result.shopifyUrl ||
+    result.shopPricingUrl;
+
+  if (redirectUrl) {
+    window.open(redirectUrl, "_top");
+    return true;
+  }
+  return false;
+}
+
 export default function PlansPage() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState(null);
-  const [upgradingPlan, setUpgradingPlan] = useState(null);
+  const [pendingPlan, setPendingPlan] = useState(null);
 
   useQuery(["billing-status"], () => apiFetch(billingStatusUrl()), {
     retry: false,
@@ -120,17 +135,7 @@ export default function PlansPage() {
       }),
     {
       onSuccess: (result) => {
-        const redirectUrl =
-          result.confirmationUrl ||
-          result.legacyManagedUrl ||
-          result.pricingUrl ||
-          result.shopifyUrl ||
-          result.shopPricingUrl;
-
-        if (redirectUrl) {
-          window.open(redirectUrl, "_top");
-          return;
-        }
+        if (applyBillingRedirect(result)) return;
         queryClient.invalidateQueries(["plan"]);
         setMessage({
           status: "success",
@@ -138,20 +143,61 @@ export default function PlansPage() {
             ? `You are already on the ${result.plan} plan.`
             : "Plan updated successfully.",
         });
-        setUpgradingPlan(null);
+        setPendingPlan(null);
       },
       onError: (err) => {
         setMessage({ status: "critical", text: err.message });
-        setUpgradingPlan(null);
+        setPendingPlan(null);
+      },
+    }
+  );
+
+  const downgradeMutation = useMutation(
+    (planKey) =>
+      apiFetch("/api/billing/downgrade", {
+        method: "POST",
+        body: JSON.stringify({ plan: planKey }),
+      }),
+    {
+      onSuccess: (result) => {
+        if (applyBillingRedirect(result)) return;
+        queryClient.invalidateQueries(["plan"]);
+        queryClient.invalidateQueries(["billing-status"]);
+        setMessage({
+          status: "success",
+          text: result.alreadyActive
+            ? `You are already on the ${result.plan} plan.`
+            : `Downgraded to the ${result.plan} plan.`,
+        });
+        setPendingPlan(null);
+      },
+      onError: (err) => {
+        setMessage({ status: "critical", text: err.message });
+        setPendingPlan(null);
       },
     }
   );
 
   const currentPlan = data?.plan || "free";
+  const isBillingBusy =
+    subscribeMutation.isLoading || downgradeMutation.isLoading;
 
   function handleUpgrade(billingPlan) {
-    setUpgradingPlan(billingPlan);
+    setPendingPlan(billingPlan);
     subscribeMutation.mutate(billingPlan);
+  }
+
+  function handleDowngrade(planKey) {
+    const planName =
+      PLAN_DETAILS.find((p) => p.key === planKey)?.name || planKey;
+    const confirmed = window.confirm(
+      planKey === "free"
+        ? "Downgrade to Free? Paid features will stop and active forms may exceed Free limits."
+        : `Downgrade to ${planName}? Some higher-tier features may become unavailable.`
+    );
+    if (!confirmed) return;
+    setPendingPlan(planKey);
+    downgradeMutation.mutate(planKey);
   }
 
   function renderPlanAction(plan) {
@@ -176,20 +222,32 @@ export default function PlansPage() {
       );
     }
 
-    if (
-      plan.billingPlan &&
-      PLAN_RANK[plan.key] > PLAN_RANK[currentPlan]
-    ) {
+    if (PLAN_RANK[plan.key] > PLAN_RANK[currentPlan] && plan.billingPlan) {
       return (
         <button
           type="button"
           className="app-btn-primary"
-          disabled={subscribeMutation.isLoading}
+          disabled={isBillingBusy}
           onClick={() => handleUpgrade(plan.billingPlan)}
         >
-          {subscribeMutation.isLoading && upgradingPlan === plan.billingPlan
+          {subscribeMutation.isLoading && pendingPlan === plan.billingPlan
             ? "Redirecting…"
             : `Upgrade to ${plan.name}`}
+        </button>
+      );
+    }
+
+    if (PLAN_RANK[plan.key] < PLAN_RANK[currentPlan]) {
+      return (
+        <button
+          type="button"
+          className="app-btn-outline"
+          disabled={isBillingBusy}
+          onClick={() => handleDowngrade(plan.key)}
+        >
+          {downgradeMutation.isLoading && pendingPlan === plan.key
+            ? "Updating…"
+            : `Downgrade to ${plan.name}`}
         </button>
       );
     }

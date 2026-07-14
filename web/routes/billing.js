@@ -2,7 +2,10 @@ import { Router } from "express";
 import shopify from "../shopify.js";
 import { updateShopPlan } from "../services/shop.js";
 import { isDevelopmentStore } from "../services/shop-context.js";
-import { createSubscriptionConfirmationUrl } from "../services/subscription-billing.js";
+import {
+  cancelActiveSubscriptions,
+  createSubscriptionConfirmationUrl,
+} from "../services/subscription-billing.js";
 import {
   PAID_PLANS,
   getPlanSelectionTargets,
@@ -11,6 +14,9 @@ import {
 } from "../services/managed-billing.js";
 
 const router = Router();
+
+const PLAN_RANK = { free: 0, pro: 1, premium: 2 };
+const ALL_PLANS = ["free", "pro", "premium"];
 
 function getShop(res) {
   return res.locals.shopify.session.shop;
@@ -59,6 +65,11 @@ router.post("/subscribe", async (req, res) => {
 
     if (developmentStore) {
       try {
+        // Cancel higher/other plans first so downgrades resolve correctly.
+        if (PLAN_RANK[requestedPlan] < PLAN_RANK[currentPlan]) {
+          await cancelActiveSubscriptions(session, { isTest: true });
+        }
+
         const confirmationUrl = await createSubscriptionConfirmationUrl(
           session,
           requestedPlan,
@@ -100,6 +111,108 @@ router.post("/subscribe", async (req, res) => {
   }
 });
 
+router.post("/downgrade", async (req, res) => {
+  try {
+    const requestedPlan = String(req.body.plan || "").toLowerCase();
+    if (!ALL_PLANS.includes(requestedPlan)) {
+      return res.status(400).json({ error: "Invalid plan" });
+    }
+
+    const session = res.locals.shopify.session;
+    const shop = getShop(res);
+    const { plan: currentPlan } = await getActiveBillingState(session);
+
+    if (PLAN_RANK[requestedPlan] >= PLAN_RANK[currentPlan]) {
+      return res.status(400).json({
+        error: "Use upgrade to move to a higher plan.",
+      });
+    }
+
+    if (currentPlan === requestedPlan) {
+      await updateShopPlan(shop, requestedPlan);
+      return res.json({ success: true, plan: requestedPlan, alreadyActive: true });
+    }
+
+    const developmentStore = await isDevelopmentStore(session);
+    const isTest = developmentStore || isBillingTest();
+    const targets = await getPlanSelectionTargets(session, shop);
+
+    // Free: cancel active Shopify subscriptions and set local plan.
+    if (requestedPlan === "free") {
+      if (developmentStore) {
+        try {
+          await cancelActiveSubscriptions(session, { isTest: true });
+          await updateShopPlan(shop, "free");
+          return res.json({
+            success: true,
+            plan: "free",
+            billingMethod: "subscription_cancel",
+          });
+        } catch (cancelError) {
+          console.warn(
+            "Dev store subscription cancel failed, falling back to pricing URLs:",
+            cancelError.message
+          );
+        }
+      }
+
+      // Production / managed pricing: merchant cancels via Shopify pricing page.
+      return res.json({
+        success: true,
+        confirmationUrl: null,
+        legacyManagedUrl: targets.legacyManagedUrl,
+        shopifyUrl: targets.shopifyUrl,
+        pricingUrl: targets.pricingUrl,
+        shopPricingUrl: targets.shopPricingUrl,
+        isTestCharge: isTest,
+        billingMethod: "managed_pricing",
+        targetPlan: "free",
+      });
+    }
+
+    // Paid downgrade (e.g. Premium → Pro): same charge / pricing flow as subscribe.
+    if (developmentStore) {
+      try {
+        await cancelActiveSubscriptions(session, { isTest: true });
+        const confirmationUrl = await createSubscriptionConfirmationUrl(
+          session,
+          requestedPlan,
+          { isTest: true }
+        );
+        return res.json({
+          success: true,
+          confirmationUrl,
+          isTestCharge: true,
+          billingMethod: "subscription_create",
+          targetPlan: requestedPlan,
+        });
+      } catch (subscriptionError) {
+        console.warn(
+          "Dev store downgrade subscription create failed, falling back to pricing URLs:",
+          subscriptionError.message
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      confirmationUrl: null,
+      legacyManagedUrl: targets.legacyManagedUrl,
+      shopifyUrl: targets.shopifyUrl,
+      pricingUrl: targets.pricingUrl,
+      shopPricingUrl: targets.shopPricingUrl,
+      isTestCharge: isTest,
+      billingMethod: "managed_pricing",
+      targetPlan: requestedPlan,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      error: err.message || "Unable to downgrade plan.",
+    });
+  }
+});
+
 router.post("/dev/activate", async (req, res) => {
   try {
     if (process.env.NODE_ENV === "production") {
@@ -109,7 +222,7 @@ router.post("/dev/activate", async (req, res) => {
     }
 
     const plan = String(req.body.plan || "").toLowerCase();
-    if (!["free", "pro", "premium"].includes(plan)) {
+    if (!ALL_PLANS.includes(plan)) {
       return res.status(400).json({ error: "Invalid plan" });
     }
 

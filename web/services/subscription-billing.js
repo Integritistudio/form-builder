@@ -23,6 +23,21 @@ const SUBSCRIPTION_CREATE = `#graphql
   }
 `;
 
+const SUBSCRIPTION_CANCEL = `#graphql
+  mutation AppSubscriptionCancel($id: ID!) {
+    appSubscriptionCancel(id: $id) {
+      appSubscription {
+        id
+        status
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
 /**
  * After charge approval Shopify redirects here. Must include shop (and host)
  * or ensureInstalledOnShop() responds with "No shop provided".
@@ -97,4 +112,41 @@ export async function createSubscriptionConfirmationUrl(
   }
 
   return payload.confirmationUrl;
+}
+
+/**
+ * Cancel all active app subscriptions for the session shop.
+ * Needed when downgrading to Free (or before switching paid plans via API).
+ */
+export async function cancelActiveSubscriptions(session, { isTest = true } = {}) {
+  const { billing } = shopify.api;
+  const result = await billing.check({
+    session,
+    isTest,
+    returnObject: true,
+  });
+
+  const subscriptions = result.appSubscriptions || [];
+  if (subscriptions.length === 0) {
+    return { cancelled: 0 };
+  }
+
+  const client = new shopify.api.clients.Graphql({ session });
+  let cancelled = 0;
+
+  for (const subscription of subscriptions) {
+    const response = await client.request(SUBSCRIPTION_CANCEL, {
+      variables: { id: subscription.id },
+    });
+
+    const payload = response.data?.appSubscriptionCancel;
+    const userErrors = payload?.userErrors ?? [];
+    if (userErrors.length > 0) {
+      throw new Error(userErrors.map((error) => error.message).join(", "));
+    }
+
+    cancelled += 1;
+  }
+
+  return { cancelled };
 }
