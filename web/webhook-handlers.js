@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "./db/index.js";
 import { forms, submissions, shopSettings } from "./db/schema.js";
 import { updateShopPlan } from "./services/shop.js";
+import { normalizePlanKey } from "./services/managed-billing.js";
 
 /** App-specific webhooks (declared in shopify.app.toml, not registered via API). */
 export const AppSpecificWebhookHandlers = {
@@ -16,11 +17,9 @@ export const AppSpecificWebhookHandlers = {
         const name = payload.app_subscription?.name;
 
         if (status === "ACTIVE" && name) {
-          const plan = name.toLowerCase().trim();
-          const normalized =
-            plan === "peo" ? "pro" : plan;
-          if (["pro", "premium"].includes(normalized)) {
-            await updateShopPlan(shop, normalized);
+          const plan = normalizePlanKey(name);
+          if (plan) {
+            await updateShopPlan(shop, plan);
           }
         } else if (status === "CANCELLED" || status === "EXPIRED") {
           await updateShopPlan(shop, "free");

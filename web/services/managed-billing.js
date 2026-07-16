@@ -1,6 +1,6 @@
 import { getInstalledAppHandle } from "./shop-context.js";
 
-/** Plan keys must match Partner Dashboard public plan handles: free, pro, premium */
+/** Plan keys must match Shopify App Pricing public plan handles: free, pro, premium */
 export const PAID_PLANS = ["pro", "premium"];
 
 const PLAN_RANK = { free: 0, pro: 1, premium: 2 };

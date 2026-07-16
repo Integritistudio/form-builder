@@ -66,12 +66,18 @@ function billingStatusUrl() {
   return `/api/billing/status?${query.toString()}`;
 }
 
+function getBillingContext() {
+  const params = new URLSearchParams(window.location.search);
+  const host = params.get("host");
+  return host ? { host } : {};
+}
+
 function applyBillingRedirect(result) {
   const redirectUrl =
-    result.confirmationUrl ||
-    result.legacyManagedUrl ||
+    result.exitUrl ||
     result.pricingUrl ||
     result.shopifyUrl ||
+    result.legacyManagedUrl ||
     result.shopPricingUrl;
 
   if (redirectUrl) {
@@ -131,7 +137,7 @@ export default function PlansPage() {
     (billingPlan) =>
       apiFetch("/api/billing/subscribe", {
         method: "POST",
-        body: JSON.stringify({ plan: billingPlan }),
+        body: JSON.stringify({ plan: billingPlan, ...getBillingContext() }),
       }),
     {
       onSuccess: (result) => {
@@ -156,7 +162,7 @@ export default function PlansPage() {
     (planKey) =>
       apiFetch("/api/billing/downgrade", {
         method: "POST",
-        body: JSON.stringify({ plan: planKey }),
+        body: JSON.stringify({ plan: planKey, ...getBillingContext() }),
       }),
     {
       onSuccess: (result) => {
@@ -285,14 +291,15 @@ export default function PlansPage() {
             </Layout.Section>
           )}
 
-          {/* {data?.developmentStore && !IS_LOCAL_DEV && (
+          {!IS_LOCAL_DEV && (
             <Layout.Section>
               <Banner status="info">
-                Development store: upgrading opens Shopify&apos;s test charge
-                approval screen. You won&apos;t be billed on a dev store.
+                Plan changes are managed through Shopify. You&apos;ll be
+                redirected to Shopify&apos;s pricing page to confirm your
+                selection.
               </Banner>
             </Layout.Section>
-          )} */}
+          )}
 
           {isLoading ? (
             <Layout.Section>
