@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Page, Layout, Banner } from "@shopify/polaris";
+import {
+  Page,
+  Layout,
+  Banner,
+  TextField,
+  Button,
+  FormLayout,
+} from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 
@@ -91,6 +98,8 @@ export default function PlansPage() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState(null);
   const [pendingPlan, setPendingPlan] = useState(null);
+  const [affiliateInput, setAffiliateInput] = useState("");
+  const [affiliateMessage, setAffiliateMessage] = useState(null);
 
   useQuery(["billing-status"], () => apiFetch(billingStatusUrl()), {
     retry: false,
@@ -117,6 +126,32 @@ export default function PlansPage() {
   });
 
   const { data, isLoading } = useQuery(["plan"], () => apiFetch("/api/plan"));
+
+  const affiliateMutation = useMutation(
+    (affiliateCode) =>
+      apiFetch("/api/plan/affiliate", {
+        method: "POST",
+        body: JSON.stringify({ affiliate_code: affiliateCode }),
+      }),
+    {
+      onSuccess: (result) => {
+        queryClient.invalidateQueries(["plan"]);
+        setAffiliateInput("");
+        setAffiliateMessage({
+          status: "success",
+          text: result.duplicateAttribution
+            ? "Affiliate code already linked to this store."
+            : "Affiliate code saved successfully.",
+        });
+      },
+      onError: (err) => {
+        setAffiliateMessage({
+          status: "critical",
+          text: err.message || "Invalid affiliate code.",
+        });
+      },
+    }
+  );
 
   const devActivateMutation = useMutation(
     (plan) =>
@@ -185,6 +220,7 @@ export default function PlansPage() {
   );
 
   const currentPlan = data?.plan || "free";
+  const savedAffiliateCode = data?.affiliateCode || null;
   const isBillingBusy =
     subscribeMutation.isLoading || downgradeMutation.isLoading;
 
@@ -204,6 +240,11 @@ export default function PlansPage() {
     if (!confirmed) return;
     setPendingPlan(planKey);
     downgradeMutation.mutate(planKey);
+  }
+
+  function handleAffiliateSubmit() {
+    setAffiliateMessage(null);
+    affiliateMutation.mutate(affiliateInput.trim());
   }
 
   function renderPlanAction(plan) {
@@ -298,6 +339,61 @@ export default function PlansPage() {
                 redirected to Shopify&apos;s pricing page to confirm your
                 selection.
               </Banner>
+            </Layout.Section>
+          )}
+
+          {!isLoading && (
+            <Layout.Section>
+              <div className="app-panel app-section-gap">
+                <div className="app-panel-body">
+                  <h3 className="app-plan-name" style={{ marginBottom: 8 }}>
+                    Affiliate code
+                  </h3>
+                  <p className="app-subdued" style={{ marginBottom: 16 }}>
+                    Enter a partner affiliate code once. It is verified before
+                    being saved and cannot be changed afterward.
+                  </p>
+
+                  {affiliateMessage && (
+                    <div style={{ marginBottom: 16 }}>
+                      <Banner
+                        status={affiliateMessage.status}
+                        onDismiss={() => setAffiliateMessage(null)}
+                      >
+                        {affiliateMessage.text}
+                      </Banner>
+                    </div>
+                  )}
+
+                  {savedAffiliateCode ? (
+                    <div className="app-flex-center" style={{ gap: 12, flexWrap: "wrap" }}>
+                      <span className="app-subdued">Saved code</span>
+                      <span className="app-status app-status--active">
+                        {savedAffiliateCode}
+                      </span>
+                    </div>
+                  ) : (
+                    <FormLayout>
+                      <TextField
+                        label="Affiliate code"
+                        value={affiliateInput}
+                        onChange={setAffiliateInput}
+                        autoComplete="off"
+                        placeholder="AFF-ABC123"
+                        disabled={affiliateMutation.isLoading}
+                      />
+                      <Button
+                        primary
+                        loading={affiliateMutation.isLoading}
+                        disabled={!affiliateInput.trim()}
+                        onClick={handleAffiliateSubmit}
+                      >
+                        Save affiliate code
+                      </Button>
+                    </FormLayout>
+                  )}
+                </div>
+              </div>
             </Layout.Section>
           )}
 

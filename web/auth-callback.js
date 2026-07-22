@@ -4,6 +4,14 @@ import {
   InvalidOAuthError,
 } from "@shopify/shopify-api";
 import { ensureExpiringOfflineSession } from "./lib/ensure-expiring-session.js";
+import { fetchShopWebhookInfo } from "./services/shop-context.js";
+import {
+  ensureShopSettings,
+  markInstallWebhookSent,
+  shouldSendInstallWebhook,
+  updateShopProfile,
+} from "./services/shop.js";
+import { sendInstallWebhook } from "./services/data-webhooks.js";
 
 /**
  * OAuth callback without programmatic webhook registration.
@@ -28,6 +36,10 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
       session,
     };
 
+    await notifyInstallIfNeeded(session).catch((err) => {
+      console.error("Install data webhook failed:", err);
+    });
+
     return next();
   } catch (error) {
     console.error("Failed to complete OAuth:", error);
@@ -47,5 +59,33 @@ export async function completeOAuthCallback({ req, res, shopify, next }) {
     }
 
     return res.status(500).send(error.message);
+  }
+}
+
+async function notifyInstallIfNeeded(session) {
+  const shopDomain = session.shop;
+  const settings = await ensureShopSettings(shopDomain);
+  const shopInfo = await fetchShopWebhookInfo(session);
+
+  await updateShopProfile(shopDomain, {
+    shopName: shopInfo.shopName,
+    shopifyShopId: shopInfo.shopifyShopId,
+  });
+
+  if (!shouldSendInstallWebhook(settings)) {
+    return;
+  }
+
+  const result = await sendInstallWebhook({
+    shopDomain,
+    shopUrl: shopInfo.shopUrl,
+    shopName: shopInfo.shopName,
+    shopifyShopId: shopInfo.shopifyShopId,
+  });
+
+  if (result.ok || result.data?.duplicate) {
+    await markInstallWebhookSent(shopDomain);
+  } else if (!result.skipped) {
+    console.error("Install webhook rejected:", result.error || result.data);
   }
 }

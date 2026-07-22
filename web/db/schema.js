@@ -13,6 +13,13 @@ export const shopSettings = pgTable("shop_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
   shopDomain: varchar("shop_domain", { length: 255 }).notNull().unique(),
   plan: varchar("plan", { length: 20 }).notNull().default("free"),
+  shopName: varchar("shop_name", { length: 255 }),
+  shopifyShopId: varchar("shopify_shop_id", { length: 255 }),
+  affiliateCode: varchar("affiliate_code", { length: 255 }),
+  installWebhookSentAt: timestamp("install_webhook_sent_at", {
+    withTimezone: true,
+  }),
+  uninstalledAt: timestamp("uninstalled_at", { withTimezone: true }),
   smtpHost: varchar("smtp_host", { length: 255 }),
   smtpPort: integer("smtp_port"),
   smtpUser: varchar("smtp_user", { length: 255 }),

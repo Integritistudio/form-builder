@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS submission_files (
 
 CREATE INDEX IF NOT EXISTS idx_submission_files_submission_id ON submission_files(submission_id);
 CREATE INDEX IF NOT EXISTS idx_submission_files_form_id ON submission_files(form_id);
+
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS shop_name VARCHAR(255);
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS shopify_shop_id VARCHAR(255);
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS affiliate_code VARCHAR(255);
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS install_webhook_sent_at TIMESTAMPTZ;
+ALTER TABLE shop_settings ADD COLUMN IF NOT EXISTS uninstalled_at TIMESTAMPTZ;
 `;
 
 export async function runMigrations() {
