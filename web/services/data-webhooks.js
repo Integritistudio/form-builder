@@ -11,8 +11,31 @@ function joinUrl(base, path) {
   return `${root}${suffix}`;
 }
 
+function shopKey(shopMeta = {}) {
+  return (
+    shopMeta.shopifyShopId ||
+    shopMeta.shopify_shop_id ||
+    shopMeta.shopUrl ||
+    shopMeta.shop_url ||
+    shopMeta.shopDomain ||
+    "unknown"
+  );
+}
+
+/** Prefer caller-supplied id; fall back to a stable key, then UUID last resort. */
+export function resolveEventId(preferred, fallback) {
+  if (preferred) return String(preferred);
+  if (fallback) return String(fallback);
+  return randomUUID();
+}
+
 export function getShopifyAppId() {
-  return process.env.SHOPIFY_API_KEY || process.env.CLIENT_ID || "";
+  return (
+    process.env.SHOPIFY_APP_ID ||
+    process.env.SHOPIFY_API_KEY ||
+    process.env.CLIENT_ID ||
+    ""
+  );
 }
 
 export function getDataWebhookConfig() {
@@ -27,26 +50,27 @@ export function getDataWebhookConfig() {
   };
 }
 
+/**
+ * Auth uses WEBHOOK_SECRET only (portal contract).
+ * Prefer X-Webhook-Secret; HMAC is available as an alternate header keyed with the same secret.
+ */
 function buildAuthHeaders(rawBody) {
   const { secret } = getDataWebhookConfig();
   const headers = {
     "Content-Type": "application/json",
   };
 
-  if (secret) {
-    headers["X-Webhook-Secret"] = secret;
-    return headers;
+  if (!secret) {
+    return { headers, missingSecret: true };
   }
 
-  const hmacKey =
-    process.env.SHOPIFY_API_SECRET || process.env.CLIENT_SECRET || "";
-  if (hmacKey) {
-    headers["X-Shopify-Hmac-Sha256"] = createHmac("sha256", hmacKey)
-      .update(rawBody, "utf8")
-      .digest("base64");
-  }
+  // Prefer shared-secret header; also attach HMAC so either portal check succeeds.
+  headers["X-Webhook-Secret"] = secret;
+  headers["X-Shopify-Hmac-Sha256"] = createHmac("sha256", secret)
+    .update(rawBody, "utf8")
+    .digest("base64");
 
-  return headers;
+  return { headers, missingSecret: false };
 }
 
 export function buildShopPayload(shopMeta = {}, extras = {}) {
@@ -77,7 +101,23 @@ export async function sendDataWebhook(url, payload) {
   }
 
   const body = JSON.stringify(payload);
-  const headers = buildAuthHeaders(body);
+  const { headers, missingSecret } = buildAuthHeaders(body);
+
+  if (missingSecret) {
+    console.error(
+      "Data webhook skipped: WEBHOOK_SECRET is not configured."
+    );
+    return {
+      ok: false,
+      skipped: true,
+      status: 0,
+      data: null,
+      error: {
+        code: "MISSING_SECRET",
+        message: "WEBHOOK_SECRET is required for portal webhooks.",
+      },
+    };
+  }
 
   try {
     const response = await fetch(url, {
@@ -120,49 +160,57 @@ export async function sendDataWebhook(url, payload) {
 
 export async function sendInstallWebhook(shopMeta, { eventId } = {}) {
   const { installUrl } = getDataWebhookConfig();
+  const key = shopKey(shopMeta);
   return sendDataWebhook(
     installUrl,
     buildShopPayload(shopMeta, {
       status: "installed",
-      event_id: eventId || `install_${shopMeta.shopUrl || shopMeta.shopDomain}_${randomUUID()}`,
+      event_id: resolveEventId(eventId, `install-${key}`),
     })
   );
 }
 
 export async function sendUninstallWebhook(shopMeta, { eventId } = {}) {
   const { uninstallUrl } = getDataWebhookConfig();
+  const key = shopKey(shopMeta);
   return sendDataWebhook(
     uninstallUrl,
     buildShopPayload(shopMeta, {
-      event_id:
-        eventId ||
-        `uninstall_${shopMeta.shopUrl || shopMeta.shopDomain}_${randomUUID()}`,
+      event_id: resolveEventId(eventId, `uninstall-${key}`),
     })
   );
 }
 
 export async function sendAffiliateWebhook(shopMeta, affiliateCode, { eventId } = {}) {
   const { affiliateUrl } = getDataWebhookConfig();
+  const code = String(affiliateCode || "").trim();
+  const key = shopKey(shopMeta);
   return sendDataWebhook(
     affiliateUrl,
     buildShopPayload(shopMeta, {
-      affiliate_code: String(affiliateCode || "").trim(),
-      event_id:
-        eventId ||
-        `aff_${shopMeta.shopUrl || shopMeta.shopDomain}_${randomUUID()}`,
+      affiliate_code: code,
+      event_id: resolveEventId(eventId, `affcode-${key}-${code}`),
     })
   );
 }
 
 export async function sendBillingWebhook(shopMeta, billingPayload, { eventId } = {}) {
   const { billingUrl } = getDataWebhookConfig();
+  const key = shopKey(shopMeta);
+  const type = billingPayload.event_type || "event";
+  const paymentOrSub =
+    billingPayload.shopify_payment_id ||
+    billingPayload.shopify_subscription_id ||
+    key;
+
   return sendDataWebhook(
     billingUrl,
     buildShopPayload(shopMeta, {
       ...billingPayload,
-      event_id:
-        eventId ||
-        `billing_${billingPayload.event_type || "event"}_${shopMeta.shopUrl || shopMeta.shopDomain}_${randomUUID()}`,
+      event_id: resolveEventId(
+        eventId || billingPayload.event_id,
+        `${type}-${paymentOrSub}`
+      ),
     })
   );
 }

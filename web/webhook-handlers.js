@@ -27,6 +27,12 @@ function subscriptionIdFromPayload(subscription) {
   );
 }
 
+function toIso(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 /** App-specific webhooks (declared in shopify.app.toml, not registered via API). */
 export const AppSpecificWebhookHandlers = {
   APP_SUBSCRIPTIONS_UPDATE: {
@@ -41,6 +47,7 @@ export const AppSpecificWebhookHandlers = {
         const settings = await ensureShopSettings(shop);
         const shopMeta = toShopWebhookMeta(settings);
         const previousPlan = settings.plan;
+        const subscriptionId = subscriptionIdFromPayload(subscription);
 
         if (status === "ACTIVE" && name) {
           const plan = normalizePlanKey(name);
@@ -48,42 +55,80 @@ export const AppSpecificWebhookHandlers = {
             await updateShopPlan(shop, plan);
 
             if (previousPlan !== plan && previousPlan !== "free") {
-              await sendBillingWebhook(shopMeta, {
-                event_type: "plan_changed",
-                shopify_subscription_id: subscriptionIdFromPayload(subscription),
-                shopify_plan_id: plan,
-                previous_shopify_plan_id: previousPlan,
-              });
+              await sendBillingWebhook(
+                shopMeta,
+                {
+                  event_type: "plan_changed",
+                  shopify_subscription_id: subscriptionId,
+                  shopify_plan_id: plan,
+                  previous_shopify_plan_id: previousPlan,
+                },
+                {
+                  eventId: `plan-changed-${subscriptionId || shopMeta.shopifyShopId}-${previousPlan}-${plan}`,
+                }
+              );
             } else if (previousPlan !== plan) {
               const price = PLAN_PRICES[plan];
-              await sendBillingWebhook(shopMeta, {
-                event_type: "subscription_activated",
-                shopify_subscription_id: subscriptionIdFromPayload(subscription),
-                shopify_plan_id: plan,
-                ...(price || {}),
-              });
+              await sendBillingWebhook(
+                shopMeta,
+                {
+                  event_type: "subscription_activated",
+                  shopify_subscription_id: subscriptionId,
+                  shopify_plan_id: plan,
+                  ...(price || {}),
+                },
+                {
+                  eventId: `sub-${subscriptionId || shopMeta.shopifyShopId}-activated`,
+                }
+              );
 
               if (price) {
-                await sendBillingWebhook(shopMeta, {
-                  event_type: "payment_completed",
-                  amount: price.amount,
-                  currency: price.currency,
-                  shopify_payment_id:
-                    subscriptionIdFromPayload(subscription) ||
-                    `pay_${shop}_${plan}`,
-                  shopify_subscription_id: subscriptionIdFromPayload(subscription),
-                  shopify_plan_id: plan,
-                });
+                const paymentId =
+                  subscriptionId || `pay_${shop}_${plan}`;
+                await sendBillingWebhook(
+                  shopMeta,
+                  {
+                    event_type: "payment_completed",
+                    amount: price.amount,
+                    currency: price.currency,
+                    shopify_payment_id: paymentId,
+                    shopify_subscription_id: subscriptionId,
+                    shopify_plan_id: plan,
+                  },
+                  { eventId: `pay-${paymentId}-completed` }
+                );
               }
             }
           }
         } else if (status === "CANCELLED" || status === "EXPIRED") {
           await updateShopPlan(shop, "free");
-          await sendBillingWebhook(shopMeta, {
-            event_type: "subscription_cancelled",
-            shopify_subscription_id: subscriptionIdFromPayload(subscription),
-            shopify_plan_id: previousPlan !== "free" ? previousPlan : undefined,
-          });
+          await sendBillingWebhook(
+            shopMeta,
+            {
+              event_type: "subscription_cancelled",
+              shopify_subscription_id: subscriptionId,
+              shopify_plan_id: previousPlan !== "free" ? previousPlan : undefined,
+            },
+            {
+              eventId: `sub-${subscriptionId || shopMeta.shopifyShopId}-cancelled`,
+            }
+          );
+        } else if (status === "DECLINED") {
+          const plan = normalizePlanKey(name) || (previousPlan !== "free" ? previousPlan : null);
+          const price = plan ? PLAN_PRICES[plan] : null;
+          const paymentId = subscriptionId || `pay_${shop}_declined`;
+
+          await sendBillingWebhook(
+            shopMeta,
+            {
+              event_type: "payment_declined",
+              ...(price || {}),
+              shopify_payment_id: paymentId,
+              shopify_subscription_id: subscriptionId,
+              shopify_plan_id: plan || undefined,
+            },
+            { eventId: `pay-${paymentId}-declined` }
+          );
         }
       } catch (err) {
         console.error("Subscription webhook error:", err);
@@ -98,7 +143,11 @@ export const AppSpecificWebhookHandlers = {
       try {
         const settings = await ensureShopSettings(shop);
         const shopMeta = toShopWebhookMeta(settings);
-        const result = await sendUninstallWebhook(shopMeta);
+        const installMarker =
+          toIso(settings.installWebhookSentAt) || "unknown";
+        const result = await sendUninstallWebhook(shopMeta, {
+          eventId: `uninstall-${shopMeta.shopifyShopId}-${installMarker}`,
+        });
         if (!result.ok && !result.skipped) {
           console.error("Uninstall webhook rejected:", result.error || result.data);
         }

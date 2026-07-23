@@ -77,7 +77,7 @@ export async function markShopUninstalled(shopDomain) {
     .set({
       plan: "free",
       uninstalledAt: new Date(),
-      affiliateCode: null,
+      // Keep affiliateCode so referral survives reinstall (portal contract).
       installWebhookSentAt: null,
       updatedAt: new Date(),
     })

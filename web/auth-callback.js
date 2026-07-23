@@ -76,12 +76,23 @@ async function notifyInstallIfNeeded(session) {
     return;
   }
 
-  const result = await sendInstallWebhook({
-    shopDomain,
-    shopUrl: shopInfo.shopUrl,
-    shopName: shopInfo.shopName,
-    shopifyShopId: shopInfo.shopifyShopId,
-  });
+  const shopId = shopInfo.shopifyShopId || shopDomain;
+  const reinstallMarker = settings.uninstalledAt
+    ? new Date(settings.uninstalledAt).toISOString()
+    : null;
+  const eventId = reinstallMarker
+    ? `install-${shopId}-${reinstallMarker}`
+    : `install-${shopId}`;
+
+  const result = await sendInstallWebhook(
+    {
+      shopDomain,
+      shopUrl: shopInfo.shopUrl,
+      shopName: shopInfo.shopName,
+      shopifyShopId: shopInfo.shopifyShopId,
+    },
+    { eventId }
+  );
 
   if (result.ok || result.data?.duplicate) {
     await markInstallWebhookSent(shopDomain);

@@ -99,6 +99,7 @@ router.post("/affiliate", async (req, res) => {
     });
 
     const freshSettings = await getShopSettings(shopDomain);
+    const shopId = shopInfo.shopifyShopId || shopDomain;
     const result = await sendAffiliateWebhook(
       {
         ...toShopWebhookMeta(freshSettings),
@@ -106,7 +107,8 @@ router.post("/affiliate", async (req, res) => {
         shopName: shopInfo.shopName,
         shopifyShopId: shopInfo.shopifyShopId,
       },
-      affiliateCode
+      affiliateCode,
+      { eventId: `affcode-${shopId}-${affiliateCode}` }
     );
 
     if (!result.ok) {
