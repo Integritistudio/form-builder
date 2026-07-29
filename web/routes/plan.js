@@ -13,11 +13,12 @@ import {
   isDevelopmentStore,
 } from "../services/shop-context.js";
 import {
-  PLANS,
   getTotalFormLimit,
   getActiveFormLimit,
   getMonthlySubmissionLimit,
   getPlanFeatures,
+  serializeLimit,
+  serializePlans,
 } from "../services/plans.js";
 import { countMonthlySubmissions } from "../services/submissionLimits.js";
 import { sendAffiliateWebhook } from "../services/data-webhooks.js";
@@ -53,16 +54,16 @@ router.get("/", async (req, res) => {
     res.json({
       plan: settings.plan,
       developmentStore,
-      plans: PLANS,
+      plans: serializePlans(),
       features: getPlanFeatures(settings.plan),
       affiliateCode: settings.affiliateCode || null,
       usage: {
         totalForms: total,
         activeForms: active,
-        totalFormLimit: getTotalFormLimit(settings.plan),
-        activeFormLimit: getActiveFormLimit(settings.plan),
+        totalFormLimit: serializeLimit(getTotalFormLimit(settings.plan)),
+        activeFormLimit: serializeLimit(getActiveFormLimit(settings.plan)),
         monthlySubmissions,
-        monthlySubmissionLimit,
+        monthlySubmissionLimit: serializeLimit(monthlySubmissionLimit),
       },
       smtpConfigured: Boolean(settings.smtpHost && settings.emailTo),
     });

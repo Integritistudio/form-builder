@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "react-query";
 import { useNavigate } from "react-router-dom";
 
 import { apiFetch } from "../utils/api";
+import { formatLimit, isAtLimit } from "../utils/limits";
 import { AppShell } from "../components/layout";
 import {
   IconDocument,
@@ -392,17 +393,15 @@ export default function FormsIndexPage() {
 
   const forms = formsData?.forms || [];
 
-  function formatLimit(value) {
-    return value === Infinity || value == null ? "unlimited" : String(value);
-  }
+  const atTotalLimit = isAtLimit(
+    planData?.usage?.totalForms,
+    planData?.usage?.totalFormLimit
+  );
 
-  const atTotalLimit =
-    planData?.usage?.totalFormLimit !== Infinity &&
-    planData?.usage?.totalForms >= planData?.usage?.totalFormLimit;
-
-  const atActiveLimit =
-    planData?.usage?.activeFormLimit !== Infinity &&
-    planData?.usage?.activeForms >= planData?.usage?.activeFormLimit;
+  const atActiveLimit = isAtLimit(
+    planData?.usage?.activeForms,
+    planData?.usage?.activeFormLimit
+  );
 
   const lastUpdated = new Date().toLocaleDateString(undefined, {
     month: "long",

@@ -64,6 +64,25 @@ export function formatLimit(limit) {
   return limit === Infinity ? "unlimited" : String(limit);
 }
 
+/** JSON.stringify turns Infinity into null, so make unlimited limits explicit. */
+export function serializeLimit(limit) {
+  return limit === Infinity ? null : limit;
+}
+
+export function serializePlans(plans = PLANS) {
+  return Object.fromEntries(
+    Object.entries(plans).map(([key, plan]) => [
+      key,
+      {
+        ...plan,
+        totalFormLimit: serializeLimit(plan.totalFormLimit),
+        activeFormLimit: serializeLimit(plan.activeFormLimit),
+        monthlySubmissionLimit: serializeLimit(plan.monthlySubmissionLimit),
+      },
+    ])
+  );
+}
+
 export function canCreateForm(plan, currentCount) {
   const limit = getTotalFormLimit(plan);
   return currentCount < limit;

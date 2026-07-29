@@ -11,6 +11,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 
 import { apiFetch } from "../utils/api";
+import { formatLimit, isUnlimited } from "../utils/limits";
 import { AppShell, PageHero } from "../components/layout";
 
 const PLAN_DETAILS = [
@@ -60,10 +61,6 @@ const PLAN_DETAILS = [
 
 const IS_LOCAL_DEV = import.meta.env.DEV;
 const PLAN_RANK = { free: 0, pro: 1, premium: 2 };
-
-function formatLimit(value) {
-  return value === Infinity || value == null ? "unlimited" : String(value);
-}
 
 function billingStatusUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -415,17 +412,17 @@ export default function PlansPage() {
                       </span>
                       <span className="app-subdued">
                         {data.usage.activeForms} active
-                        {data.usage.activeFormLimit !== Infinity &&
+                        {!isUnlimited(data.usage.activeFormLimit) &&
                           ` of ${formatLimit(data.usage.activeFormLimit)}`}
                       </span>
                       <span className="app-subdued">
                         {data.usage.totalForms} total
-                        {data.usage.totalFormLimit !== Infinity &&
+                        {!isUnlimited(data.usage.totalFormLimit) &&
                           ` of ${formatLimit(data.usage.totalFormLimit)}`}
                       </span>
                       <span className="app-subdued">
                         {data.usage.monthlySubmissions} submissions this month
-                        {data.usage.monthlySubmissionLimit !== Infinity &&
+                        {!isUnlimited(data.usage.monthlySubmissionLimit) &&
                           ` of ${formatLimit(data.usage.monthlySubmissionLimit)}`}
                       </span>
                     </div>
