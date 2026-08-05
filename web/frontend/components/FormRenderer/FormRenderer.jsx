@@ -15,7 +15,7 @@ function StepProgress({
   interactive,
 }) {
   const config = schema.multiStep || {};
-  if (!config.showProgress) return null;
+  if (config.showProgress === false) return null;
 
   const style = config.progressStyle || "bar";
   const pct = Math.round(((currentStep + 1) / totalSteps) * 100);

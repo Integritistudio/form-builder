@@ -70,9 +70,18 @@
     return errors;
   }
 
+  function safeInsertBefore(parent, newNode, referenceNode) {
+    if (!parent || !newNode) return;
+    if (referenceNode && referenceNode.parentNode === parent) {
+      parent.insertBefore(newNode, referenceNode);
+      return;
+    }
+    parent.appendChild(newNode);
+  }
+
   function renderStepProgress(schema, currentStep, totalSteps, styles) {
     const config = schema.multiStep || {};
-    if (!config.showProgress) return null;
+    if (config.showProgress === false) return null;
 
     const style = config.progressStyle || "bar";
     const pct = Math.round(((currentStep + 1) / totalSteps) * 100);
@@ -422,16 +431,20 @@ ${customCss||""}`;
     }
 
     function showFormError(message) {
+      if (!state.root) return;
       const existing = state.root.querySelector(".integriti-form-error");
       if (existing) existing.remove();
-      state.root.insertBefore(
+      safeInsertBefore(
+        state.root,
         el("div", { className: "integriti-form-error", text: message }),
         state.formEl
       );
     }
 
     function refreshFields() {
+      if (!state.formEl) return;
       const fieldsWrap = state.formEl.querySelector(".integriti-form-fields");
+      if (!fieldsWrap) return;
       fieldsWrap.innerHTML = "";
       fieldsWrap.className = `integriti-form-fields${
         multiStep && schema.multiStep?.animateTransitions !== false
@@ -454,6 +467,8 @@ ${customCss||""}`;
     }
 
     function refreshStepChrome() {
+      if (!state.root || !state.formEl) return;
+
       const stepConfig = schema.multiStep || {};
       const totalSteps = stepGroups.length;
       const isLast = state.currentStep >= totalSteps - 1;
@@ -461,27 +476,26 @@ ${customCss||""}`;
 
       state.root
         .querySelectorAll(
-          ".integriti-step-progress, .integriti-step-dots, .integriti-step-numbered"
+          ".integriti-step-progress, .integriti-step-dots, .integriti-step-pills, .integriti-step-numbered, .integriti-step-header"
         )
         .forEach((node) => node.remove());
-      const progress = renderStepProgress(schema, state.currentStep, totalSteps, styles);
-      if (progress) state.root.insertBefore(progress, state.formEl);
 
-      let stepHeader = state.root.querySelector(".integriti-step-header");
-      if (stepHeader) stepHeader.remove();
+      const progress = renderStepProgress(schema, state.currentStep, totalSteps, styles);
+      if (progress) safeInsertBefore(state.root, progress, state.formEl);
+
       if (
         stepConfig.showStepTitles !== false &&
         activeStep &&
         (activeStep.title || activeStep.description)
       ) {
-        stepHeader = el("div", { className: "integriti-step-header" });
+        const stepHeader = el("div", { className: "integriti-step-header" });
         if (activeStep.title) {
           stepHeader.appendChild(el("h3", { className: "integriti-step-title", text: activeStep.title }));
         }
         if (activeStep.description) {
           stepHeader.appendChild(el("p", { className: "integriti-step-description", text: activeStep.description }));
         }
-        state.root.insertBefore(stepHeader, state.formEl);
+        safeInsertBefore(state.root, stepHeader, state.formEl);
       }
 
       const nav = state.formEl.querySelector(".integriti-step-nav");
@@ -622,18 +636,8 @@ ${customCss||""}`;
       const fieldsWrap = el("div", { className: "integriti-form-fields" });
       formEl.appendChild(fieldsWrap);
 
-      if (!multiStep) {
-        getVisibleFields().forEach((field) =>
-          fieldsWrap.appendChild(
-            renderField(field, values, errors, onChange, apiOrigin, id, uploadState)
-          )
-        );
-        const submit = el("button", { type: "submit", className: "integriti-submit", text: schema.submitLabel || "Submit" });
-        formEl.appendChild(submit);
-      } else {
-        refreshStepChrome();
-        refreshFields();
-      }
+      // Attach form to root before any insertBefore calls in refreshStepChrome.
+      root.appendChild(formEl);
 
       formEl.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -660,35 +664,78 @@ ${customCss||""}`;
         await submitForm(submitBtn);
       });
 
-      root.appendChild(formEl);
+      if (!multiStep) {
+        getVisibleFields().forEach((field) =>
+          fieldsWrap.appendChild(
+            renderField(field, values, errors, onChange, apiOrigin, id, uploadState)
+          )
+        );
+        const submit = el("button", { type: "submit", className: "integriti-submit", text: schema.submitLabel || "Submit" });
+        formEl.appendChild(submit);
+      } else {
+        refreshStepChrome();
+        refreshFields();
+      }
+
       container.appendChild(root);
     }
 
     draw();
   }
 
-  async function init() {
-    const blocks = document.querySelectorAll("[data-integriti-form-id]");
-    for (const block of blocks) {
-      const formId = block.getAttribute("data-integriti-form-id");
-      if (!formId) continue;
-      const apiOrigin = getApiOrigin(block);
-      block.innerHTML = '<p style="padding:16px;color:#666;">Loading form...</p>';
-      try {
-        const res = await fetch(proxyUrl(apiOrigin, `/forms/${formId}`));
-        const data = await parseJsonResponse(res);
-        if (!res.ok) throw new Error(data.error || "Form not found");
-        block.innerHTML = "";
-        renderForm(block, data.form, apiOrigin);
-      } catch (err) {
-        block.innerHTML = `<p style="padding:16px;color:#b42318;">${err.message}</p>`;
-      }
+  async function mountBlock(block, { force = false } = {}) {
+    if (!force && block.dataset.integritiMounted === "1") return;
+    block.dataset.integritiMounted = "1";
+
+    const formId = block.getAttribute("data-integriti-form-id");
+    if (!formId) {
+      delete block.dataset.integritiMounted;
+      return;
+    }
+
+    const apiOrigin = getApiOrigin(block);
+    block.innerHTML = '<p style="padding:16px;color:#666;">Loading form...</p>';
+    try {
+      const res = await fetch(proxyUrl(apiOrigin, `/forms/${formId}`));
+      const data = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(data.error || "Form not found");
+      if (!document.contains(block)) return;
+      block.innerHTML = "";
+      renderForm(block, data.form, apiOrigin);
+    } catch (err) {
+      if (!document.contains(block)) return;
+      delete block.dataset.integritiMounted;
+      block.innerHTML = `<p style="padding:16px;color:#b42318;">${err.message}</p>`;
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
+  function scan(root = document, { force = false } = {}) {
+    root.querySelectorAll("[data-integriti-form-id]").forEach((block) => {
+      mountBlock(block, { force });
+    });
   }
+
+  function boot() {
+    if (window.__integritiFormEmbedBooted) {
+      scan(document, { force: false });
+      return;
+    }
+    window.__integritiFormEmbedBooted = true;
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => scan());
+    } else {
+      scan();
+    }
+
+    // Theme editor re-renders sections when colors/settings change.
+    document.addEventListener("shopify:section:load", (event) => {
+      scan(event.target || document, { force: true });
+    });
+    document.addEventListener("shopify:section:reorder", () => {
+      scan(document, { force: true });
+    });
+  }
+
+  boot();
 })();
