@@ -3,6 +3,7 @@ import { NavMenu } from "@shopify/app-bridge-react";
 import Routes from "./Routes";
 
 import { QueryProvider, PolarisProvider } from "./components";
+import TawkChat from "./TawkChat";
 import "./styles/app.css";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
             <a href="/plans">Plans</a>
           </NavMenu>
           <Routes pages={pages} />
+          <TawkChat />
         </QueryProvider>
       </BrowserRouter>
     </PolarisProvider>
