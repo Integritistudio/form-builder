@@ -4,8 +4,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
+    "build": "node init && vite build",
+    "dev": "node init && vite",
     "coverage": "vitest run --coverage"
   },
   "type": "module",
