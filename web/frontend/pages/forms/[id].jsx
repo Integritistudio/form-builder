@@ -110,6 +110,17 @@ export default function FormEditorPage() {
     }
   );
 
+  const duplicateMutation = useMutation(
+    () => apiFetch(`/api/forms/${id}/duplicate`, { method: "POST" }),
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(["forms"]);
+        navigate(`/forms/${data.form.id}`);
+      },
+      onError: (err) => alert(err.message),
+    }
+  );
+
   function handleSave() {
     if (!state) return;
     const schema = { ...state.schema };
@@ -277,6 +288,12 @@ export default function FormEditorPage() {
               <div className="fe-header-actions">
                 <Button onClick={() => navigate(`/forms/${id}/submissions`)}>
                   Submissions
+                </Button>
+                <Button
+                  loading={duplicateMutation.isLoading}
+                  onClick={() => duplicateMutation.mutate()}
+                >
+                  Duplicate
                 </Button>
                 <Button
                   primary

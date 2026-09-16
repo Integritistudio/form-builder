@@ -1,6 +1,7 @@
 import { submissionPreview } from "../SubmissionDetailModal";
+import { IconDelete } from "../dashboard/DashboardIcons";
 
-function SubmissionRow({ sub, schema, onView, onFormClick, showForm }) {
+function SubmissionRow({ sub, schema, onView, onDelete, onFormClick, showForm }) {
   const preview = submissionPreview(schema || sub.formSchema, sub.payload, sub.files);
   const thumb = sub.files?.[0];
 
@@ -45,9 +46,22 @@ function SubmissionRow({ sub, schema, onView, onFormClick, showForm }) {
         </div>
       </td>
       <td className="app-text-right">
-        <button type="button" className="app-btn-outline" onClick={() => onView(sub)}>
-          View
-        </button>
+        <div className="app-actions" style={{ justifyContent: "flex-end" }}>
+          <button type="button" className="app-btn-outline" onClick={() => onView(sub)}>
+            View
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              className="app-icon-btn app-icon-btn--danger"
+              onClick={() => onDelete(sub.id)}
+              title="Delete submission"
+              aria-label="Delete submission"
+            >
+              <IconDelete />
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -58,6 +72,7 @@ export default function SubmissionsTable({
   loading,
   showForm = false,
   onView,
+  onDelete,
   onFormClick,
   schema,
   emptyHeading = "No submissions yet",
@@ -104,6 +119,7 @@ export default function SubmissionsTable({
                 schema={schema}
                 showForm={showForm}
                 onView={onView}
+                onDelete={onDelete}
                 onFormClick={onFormClick}
               />
             ))}

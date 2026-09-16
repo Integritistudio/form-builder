@@ -3,7 +3,11 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: resolve(__dirname, "../.env") });
+// ENV_FILE lets a dev session point at .env.dev without touching production.
+// Defaults to ../.env — identical to the old hard-coded path, so the
+// Docker / production server behaviour is completely unchanged.
+const envFile = process.env.ENV_FILE || "../.env";
+config({ path: resolve(__dirname, envFile) });
 
 // Map .env names used by this project to Shopify CLI variable names
 if (!process.env.SHOPIFY_API_KEY && process.env.CLIENT_ID) {

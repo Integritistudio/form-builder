@@ -153,7 +153,9 @@ function FormsTable({
   onSearchChange,
   onEdit,
   onSubmissions,
+  onDuplicate,
   onDelete,
+  duplicatingId,
 }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -269,6 +271,15 @@ function FormsTable({
                       </button>
                       <button
                         type="button"
+                        className="app-btn-outline"
+                        onClick={() => onDuplicate(form.id)}
+                        disabled={duplicatingId === form.id}
+                        title="Duplicate form"
+                      >
+                        {duplicatingId === form.id ? "Duplicating…" : "Duplicate"}
+                      </button>
+                      <button
+                        type="button"
                         className="app-icon-btn app-icon-btn--danger"
                         onClick={() => onDelete(form.id)}
                         title="Delete form"
@@ -372,11 +383,32 @@ export default function FormsIndexPage() {
     () => apiFetch("/api/submissions/analytics")
   );
 
+  const [duplicatingId, setDuplicatingId] = useState(null);
+
   const createMutation = useMutation(
     () => apiFetch("/api/forms", { method: "POST", body: JSON.stringify({}) }),
     {
       onSuccess: (data) => navigate(`/forms/${data.form.id}`),
       onError: (err) => alert(err.message),
+    }
+  );
+
+  const duplicateMutation = useMutation(
+    (id) => {
+      setDuplicatingId(id);
+      return apiFetch(`/api/forms/${id}/duplicate`, { method: "POST" });
+    },
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(["forms"]);
+        queryClient.invalidateQueries(["analytics"]);
+        setDuplicatingId(null);
+        navigate(`/forms/${data.form.id}`);
+      },
+      onError: (err) => {
+        setDuplicatingId(null);
+        alert(err.message);
+      },
     }
   );
 
@@ -512,6 +544,8 @@ export default function FormsIndexPage() {
                 onSearchChange={setSearch}
                 onEdit={(id) => navigate(`/forms/${id}`)}
                 onSubmissions={(id) => navigate(`/forms/${id}/submissions`)}
+                onDuplicate={(id) => duplicateMutation.mutate(id)}
+                duplicatingId={duplicatingId}
                 onDelete={setDeleteId}
               />
             )}

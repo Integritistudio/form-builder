@@ -91,6 +91,113 @@ router.get("/analytics", async (req, res) => {
   }
 });
 
+router.get("/export", async (req, res) => {
+  try {
+    const shopDomain = getShop(res);
+    const formId = req.query.formId;
+    const days = parseInt(req.query.days || "0", 10);
+
+    const conditions = [eq(submissions.shopDomain, shopDomain)];
+    if (formId) conditions.push(eq(submissions.formId, formId));
+    if (days > 0) {
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+      conditions.push(gte(submissions.createdAt, since));
+    }
+
+    const whereClause = and(...conditions);
+
+    const rows = await db
+      .select({
+        id: submissions.id,
+        formId: submissions.formId,
+        formName: forms.name,
+        formSchema: forms.schema,
+        payload: submissions.payload,
+        createdAt: submissions.createdAt,
+      })
+      .from(submissions)
+      .innerJoin(forms, eq(forms.id, submissions.formId))
+      .where(whereClause)
+      .orderBy(desc(submissions.createdAt));
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "No submissions found to export." });
+    }
+
+    // Determine all unique field keys / labels across all submissions
+    const fieldMap = new Map(); // key -> label
+    for (const row of rows) {
+      const schemaFields = row.formSchema?.fields || [];
+      for (const field of schemaFields) {
+        if (field?.id) {
+          const label = field.label || field.name || field.id;
+          if (!fieldMap.has(field.id)) {
+            fieldMap.set(field.id, label);
+          }
+        }
+      }
+      if (row.payload && typeof row.payload === "object") {
+        for (const k of Object.keys(row.payload)) {
+          if (!fieldMap.has(k)) {
+            fieldMap.set(k, k);
+          }
+        }
+      }
+    }
+
+    const dynamicKeys = Array.from(fieldMap.keys());
+
+    // CSV header row
+    const headers = [
+      "Submission ID",
+      "Form Name",
+      "Form ID",
+      "Submitted At",
+      ...dynamicKeys.map((k) => fieldMap.get(k) || k),
+    ];
+
+    function escapeCsv(val) {
+      if (val === null || val === undefined) return "";
+      let str = typeof val === "object" ? JSON.stringify(val) : String(val);
+      if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    }
+
+    const csvLines = [];
+    csvLines.push(headers.map(escapeCsv).join(","));
+
+    for (const row of rows) {
+      const line = [
+        row.id,
+        row.formName,
+        row.formId,
+        row.createdAt ? new Date(row.createdAt).toISOString() : "",
+      ];
+
+      for (const k of dynamicKeys) {
+        const val = row.payload ? row.payload[k] : "";
+        line.push(val !== undefined ? val : "");
+      }
+
+      csvLines.push(line.map(escapeCsv).join(","));
+    }
+
+    const filename = `submissions-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    // Prepend UTF-8 Byte Order Mark (\uFEFF) for Excel compatibility
+    const csvContent = "\uFEFF" + csvLines.join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    console.error("Export submissions error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/", async (req, res) => {
   try {
     const shopDomain = getShop(res);
@@ -268,6 +375,30 @@ router.get("/:submissionId/files", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const shopDomain = getShop(res);
+    const [deleted] = await db
+      .delete(submissions)
+      .where(
+        and(
+          eq(submissions.id, req.params.id),
+          eq(submissions.shopDomain, shopDomain)
+        )
+      )
+      .returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Submission not found" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete submission error:", err);
     res.status(500).json({ error: err.message });
   }
 });

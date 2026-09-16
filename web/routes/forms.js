@@ -206,6 +206,53 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
+router.post("/:id/duplicate", async (req, res) => {
+  try {
+    const shopDomain = getShop(res);
+    const [existing] = await db
+      .select()
+      .from(forms)
+      .where(
+        and(eq(forms.id, req.params.id), eq(forms.shopDomain, shopDomain))
+      )
+      .limit(1);
+
+    if (!existing) return res.status(404).json({ error: "Form not found" });
+
+    const settings = await getShopSettings(shopDomain);
+    const [{ count }] = await db
+      .select({ count: sql`COUNT(*)::int` })
+      .from(forms)
+      .where(eq(forms.shopDomain, shopDomain));
+
+    if (!canCreateForm(settings.plan, count)) {
+      const planName = getPlanName(settings.plan);
+      const limit = formatLimit(getTotalFormLimit(settings.plan));
+      return res.status(403).json({
+        error: `${planName} plan allows up to ${limit} forms. Upgrade to create more.`,
+        code: "PLAN_LIMIT",
+      });
+    }
+
+    const [duplicate] = await db
+      .insert(forms)
+      .values({
+        shopDomain,
+        name: `${existing.name} (Copy)`,
+        status: "draft",
+        schema: existing.schema,
+        styles: existing.styles,
+        customCss: existing.customCss,
+      })
+      .returning();
+
+    res.status(201).json({ form: duplicate });
+  } catch (err) {
+    console.error("Duplicate form error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/:id/submissions", async (req, res) => {
   try {
     const shopDomain = getShop(res);
