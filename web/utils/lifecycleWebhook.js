@@ -83,7 +83,7 @@ export async function sendLifecycleWebhook(
   const timer = setTimeout(() => controller.abort(), 3000);
 
   const payload = {
-    app_name: "Bookify",
+    app_name: "FormEase",
     event_name: eventName,
   };
 
