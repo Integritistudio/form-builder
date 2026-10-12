@@ -13,6 +13,7 @@ import {
   sendBillingWebhook,
   sendUninstallWebhook,
 } from "./services/data-webhooks.js";
+import { sendLifecycleWebhook } from "./utils/lifecycleWebhook.js";
 
 const PLAN_PRICES = {
   pro: { amount: 9.99, currency: "USD" },
@@ -20,11 +21,7 @@ const PLAN_PRICES = {
 };
 
 function subscriptionIdFromPayload(subscription) {
-  return (
-    subscription?.admin_graphql_api_id ||
-    subscription?.id ||
-    null
-  );
+  return subscription?.admin_graphql_api_id || subscription?.id || null;
 }
 
 function toIso(value) {
@@ -65,7 +62,7 @@ export const AppSpecificWebhookHandlers = {
                 },
                 {
                   eventId: `plan-changed-${subscriptionId || shopMeta.shopifyShopId}-${previousPlan}-${plan}`,
-                }
+                },
               );
             } else if (previousPlan !== plan) {
               const price = PLAN_PRICES[plan];
@@ -79,12 +76,11 @@ export const AppSpecificWebhookHandlers = {
                 },
                 {
                   eventId: `sub-${subscriptionId || shopMeta.shopifyShopId}-activated`,
-                }
+                },
               );
 
               if (price) {
-                const paymentId =
-                  subscriptionId || `pay_${shop}_${plan}`;
+                const paymentId = subscriptionId || `pay_${shop}_${plan}`;
                 await sendBillingWebhook(
                   shopMeta,
                   {
@@ -95,7 +91,7 @@ export const AppSpecificWebhookHandlers = {
                     shopify_subscription_id: subscriptionId,
                     shopify_plan_id: plan,
                   },
-                  { eventId: `pay-${paymentId}-completed` }
+                  { eventId: `pay-${paymentId}-completed` },
                 );
               }
             }
@@ -107,14 +103,17 @@ export const AppSpecificWebhookHandlers = {
             {
               event_type: "subscription_cancelled",
               shopify_subscription_id: subscriptionId,
-              shopify_plan_id: previousPlan !== "free" ? previousPlan : undefined,
+              shopify_plan_id:
+                previousPlan !== "free" ? previousPlan : undefined,
             },
             {
               eventId: `sub-${subscriptionId || shopMeta.shopifyShopId}-cancelled`,
-            }
+            },
           );
         } else if (status === "DECLINED") {
-          const plan = normalizePlanKey(name) || (previousPlan !== "free" ? previousPlan : null);
+          const plan =
+            normalizePlanKey(name) ||
+            (previousPlan !== "free" ? previousPlan : null);
           const price = plan ? PLAN_PRICES[plan] : null;
           const paymentId = subscriptionId || `pay_${shop}_declined`;
 
@@ -127,7 +126,7 @@ export const AppSpecificWebhookHandlers = {
               shopify_subscription_id: subscriptionId,
               shopify_plan_id: plan || undefined,
             },
-            { eventId: `pay-${paymentId}-declined` }
+            { eventId: `pay-${paymentId}-declined` },
           );
         }
       } catch (err) {
@@ -139,17 +138,53 @@ export const AppSpecificWebhookHandlers = {
   APP_UNINSTALLED: {
     deliveryMethod: DeliveryMethod.Http,
     callbackUrl: "/api/webhooks",
-    callback: async (_topic, shop) => {
+    callback: async (_topic, shop, body, webhookId) => {
       try {
+        let payload = {};
+        try {
+          payload = typeof body === "string" ? JSON.parse(body) : body || {};
+        } catch (parseError) {
+          console.warn(
+            "APP_UNINSTALLED invalid JSON payload:",
+            parseError?.message || parseError,
+          );
+          payload = {};
+        }
+
+        const contact = {
+          email:
+            payload.contact_email ||
+            payload.contact?.email ||
+            payload.email ||
+            payload.shop_email ||
+            null,
+          phone:
+            payload.contact_phone ||
+            payload.contact?.phone ||
+            payload.phone ||
+            payload.shop_phone ||
+            null,
+          location:
+            payload.location ||
+            payload.contact?.location ||
+            [payload.city, payload.province, payload.country]
+              .filter(Boolean)
+              .join(", ") ||
+            null,
+        };
+
+        await sendLifecycleWebhook("uninstalled", { contact });
         const settings = await ensureShopSettings(shop);
         const shopMeta = toShopWebhookMeta(settings);
-        const installMarker =
-          toIso(settings.installWebhookSentAt) || "unknown";
+        const installMarker = toIso(settings.installWebhookSentAt) || "unknown";
         const result = await sendUninstallWebhook(shopMeta, {
           eventId: `uninstall-${shopMeta.shopifyShopId}-${installMarker}`,
         });
         if (!result.ok && !result.skipped) {
-          console.error("Uninstall webhook rejected:", result.error || result.data);
+          console.error(
+            "Uninstall webhook rejected:",
+            result.error || result.data,
+          );
         }
       } catch (err) {
         console.error("Uninstall data webhook error:", err);

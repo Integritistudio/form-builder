@@ -15,10 +15,11 @@ import planRouter from "./routes/plan.js";
 import billingRouter from "./routes/billing.js";
 import publicRouter from "./routes/public.js";
 import submissionsRouter from "./routes/submissions.js";
+import { afterAuth } from "./utils/lifecycleWebhook.js";
 
 const PORT = parseInt(
   process.env.BACKEND_PORT || process.env.PORT || "3000",
-  10
+  10,
 );
 
 const STATIC_PATH =
@@ -36,7 +37,8 @@ app.get(shopify.config.auth.path, shopify.auth.begin());
 app.get(
   shopify.config.auth.callbackPath,
   (req, res, next) => completeOAuthCallback({ req, res, shopify, next }),
-  shopify.redirectToShopifyOrAppRoot()
+  afterAuth,
+  shopify.redirectToShopifyOrAppRoot(),
 );
 
 const webhookMiddleware = shopify.processWebhooks({
@@ -66,7 +68,7 @@ app.use("/*", shopify.ensureInstalledOnShop(), async (_req, res, _next) => {
     .send(
       readFileSync(join(STATIC_PATH, "index.html"))
         .toString()
-        .replace("%VITE_SHOPIFY_API_KEY%", process.env.SHOPIFY_API_KEY || "")
+        .replace("%VITE_SHOPIFY_API_KEY%", process.env.SHOPIFY_API_KEY || ""),
     );
 });
 
