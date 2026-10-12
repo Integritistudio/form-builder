@@ -1,4 +1,4 @@
-import shopify from "../shopify";
+import shopify from "../shopify.js";
 
 const DEFAULT_URL =
   "https://services.leadconnectorhq.com/hooks/v7dTXJkjV4Kul650VWdt/webhook-trigger/51777a9a-12c1-4f16-9309-341be07edb7d";
