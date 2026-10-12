@@ -1,0 +1,30 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: form-builder-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: shopify-app
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      args:
+        SHOPIFY_API_KEY: fd1cc82cf99ec4e9a2dadd99ada93b22
+    container_name: form-builder-app
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    ports:
+      - "5800:8081"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
